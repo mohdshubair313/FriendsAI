@@ -19,27 +19,33 @@ Welcome to **Friends AI**, the next-generation **AI-powered social platform** de
 - Explore how AI can enhance your **day-to-day productivity** and **mental well-being**.
 
 ### 🚀 **Seamless Integration**
-- Built on a modern **Next.js frontend** and powered by a robust **Python backend**.
+- Built on a modern **Next.js frontend and backend** and powered by **Gemini API**.
 - Intuitive design that ensures a smooth and engaging user experience.
 
 ---
 
 ## 🛠️ Tech Stack
 
-**Frontend:**
-- [Next.js](https://nextjs.org/): Lightning-fast and SEO-friendly UI/UX.
-- Tailwind CSS: Modern styling for an interactive and clean design.
+**Frontend & Backend:**
+- [Next.js](https://nextjs.org/): Full-stack framework for lightning-fast and SEO-friendly UI/UX and backend functionality.
 
-**Backend:**
-- Python: For advanced AI agent interactions.
-- FastAPI: Robust and scalable API services.
+**Authentication:**
+- [Auth.js](https://authjs.dev/): Session-based authentication with integrated **Google** and **GitHub** OAuth.
+
+**Payment Integration:**
+- [Razorpay](https://razorpay.com/): Secure and seamless payment gateway.
 
 **Database:**
-- MongoDB Atlas: Secure and scalable cloud database for all user and interaction data.
+- MongoDB: Secure and scalable cloud database for all user and interaction data.
 
-**AI Models:**
-- TensorFlow & PyTorch: Powering mood-based virtual companion intelligence.
-- NLTK: Enabling natural language understanding for seamless interactions.
+**Design & Animations:**
+- Tailwind CSS: Modern styling with utilities like **Tailwind Merge**.
+- ShadCN UI: Accessible and reusable component library.
+- Aceternity UI: Elegant and user-friendly design system.
+- [Three.js](https://threejs.org/) & [Framer Motion](https://www.framer.com/motion/): Stunning 3D graphics and animations.
+
+**AI Model:**
+- **Gemini 2.0 Flash**: Cutting-edge AI powering mood-based virtual companion intelligence via the Gemini API.
 
 ---
 
