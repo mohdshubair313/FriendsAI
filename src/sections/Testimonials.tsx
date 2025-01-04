@@ -8,7 +8,7 @@ import MollieHall from "@/assets/images/mollie-hall.jpg";
 import SectionBorder from "@/components/SectionBorder";
 import SectionContent from "@/components/SectionContent";
 import Image from "next/image";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence, LayoutGroup } from "framer-motion";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faQuoteLeft } from "@fortawesome/free-solid-svg-icons";
 import { Pointer } from "lucide-react";
@@ -51,24 +51,25 @@ export const Testimonials = () => {
     <div className="container">
       <SectionBorder borderTop>
         <SectionContent>
-          <div className="border-gradient rounded-3xl px-6 md:px-10 lg:px-16 py-16 lg:py-24 relative flex flex-col md:flex-row items-center gap-12 md:mx-10 lg:mx-20">
+          <LayoutGroup>
+          <motion.div layout className="border-gradient rounded-3xl px-6 md:px-10 lg:px-16 py-16 lg:py-24 relative flex flex-col md:flex-row items-center gap-12 md:mx-10 lg:mx-20">
             <div className="bg-gray-950 h-full w-full rounded-3xl px-10 py-20">
             <FontAwesomeIcon icon={faQuoteLeft} className="absolute size-20 text-violet-400 top-0 left-6 md:left-10 lg:left-16 -translate-y-1/2" />
+            <AnimatePresence mode="wait" initial={false}>
             {
-              testimonials.map((testimonial, index) => (
-                <React.Fragment key={testimonial.name}>
-                {testimonialIndex === index && (
-                  <blockquote className="flex flex-col gap-12 lg:flex-row" key={testimonial.name}>
+              testimonials.map((testimonial, index) => 
+                testimonialIndex === index ? (
+                  <motion.blockquote layout initial={{opacity: 0, y: 25}} animate={{opacity:1, y: 0}} exit={{opacity: 0, y:25}} transition={{duration: 0.25}} className="flex flex-col gap-12 lg:flex-row" key={testimonial.name}>
                   <p className="text-xl nd:text-2xl font-medium">{testimonial.quote}</p>
                   <cite className="non-italic lg:text-right">
                     <Image className="rounded-xl size-28 max-w-none" src={testimonial.image} alt={testimonial.name} />
                     <div className="font-bold mt-4">{testimonial.name}</div>
                     <div className="text-xs text-gray-400 mt-2">{testimonial.title}</div>
                   </cite>
-                </blockquote>
-                )}
-                </React.Fragment>
-              ))}
+                </motion.blockquote>
+                ): null
+              )}
+                </AnimatePresence>
               <div className="flex gap-2 md:flex-col justify-center">
                 {testimonials.map((testimonial, index) => (
                   <div onClick={() => setTestimonialIndex(index)} className="size-6 relative isolate inline-flex items-center justify-center" key={testimonial.name}>
@@ -83,7 +84,8 @@ export const Testimonials = () => {
                 ))}
               </div>
             </div>
-          </div>
+          </motion.div>
+          </LayoutGroup>
         </SectionContent>
       </SectionBorder>
     </div>

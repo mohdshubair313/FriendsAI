@@ -1,5 +1,6 @@
 import { cva } from "class-variance-authority";
 import { HTMLAttributes } from "react";
+import { useRouter } from "next/navigation";
 
 export type ButtonProp = {
   variant?: 'primary' | 'secondary' | 'tertiary'; block?: boolean; disabled?: boolean;
@@ -14,7 +15,7 @@ const classes = cva(
       },
       variant: {
         primary: 'border-gradient text-black hover:scale-105 transition-all duration-300',
-        secondary: 'bg-gray-100 text-gray-950 font-poppins',
+        secondary: 'bg-gray-100 text-gray-950 font-poppins border border-transparent',
         tertiary: 'bg-gray-800 text-gray',
       },
     },
@@ -26,19 +27,41 @@ const classes = cva(
 );
 
 const Button = ({ variant, block, className = "",children, ...otherprops }: ButtonProp) => {
+  const router = useRouter();
+
+  const gotochat = () => {
+    if(variant === 'secondary') {
+      router.push("/chat")
+    }
+  }
   return (
-    <button className={classes({ variant, block })} {...otherprops}>
-      {variant === 'primary' ? (
+    <button
+      className={`${classes({ variant, block })} ${
+        variant === "secondary"
+          ? "border-2 border-gradient-to-r from-amber-300 via-teal-300 to-fuchsia-400 border-transparent p-[1px]"
+          : ""
+      }`}
+      onClick={gotochat}
+      {...otherprops}
+    >
+      {variant === "primary" ? (
         <div className="relative">
-        <span className="text-gray-950 font-bold rounded transition-all duration-300">
+          <span className="text-gray-950 font-bold rounded transition-all duration-300">
+            {children}
+          </span>
+          {/* Shimmer Effect */}
+          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white to-transparent opacity-0 group-hover:opacity-50 transition-all duration-500 rounded-lg pointer-events-none animate-shimmer"></div>
+        </div>
+      ) : (
+        <span
+          className={
+            variant === "secondary"
+              ? "bg-gray-100 block rounded-lg px-5 py-[7px] text-center"
+              : ""
+          }
+        >
           {children}
         </span>
-        {/* Shimmer Effect */}
-        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white to-transparent opacity-0 group-hover:opacity-50 transition-all duration-500 rounded-lg pointer-events-none animate-shimmer"></div>
-      </div>
-      ) : (
-        <span>{children}</span>
-        
       )}
     </button>
   );

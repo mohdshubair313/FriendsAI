@@ -90,7 +90,7 @@ export const logos = [
 
 export const Features = () => {
   return (
-   <section>
+   <section id="#feature">
     <div className="container">
         <SectionBorder borderTop>
         <div className="flex flex-col items-center justify-center">
@@ -121,19 +121,17 @@ export const Features = () => {
                         <Logo className="size-24" />
                       </div>
                         { logos.map(({src, alt, rotate}) => (
-                          <motion.div className="absolute 
-                            inset-0" initial={{rotate:rotate,}} animate={{ 
-                            rotate: [rotate, rotate + 180,rotate + 180, rotate + 360,
-                            rotate + 360,
-                            ],
+                          <motion.div className="absolute inset-0" initial={{rotate:rotate,}} animate={{ 
+                            rotate: [rotate, rotate + 45, rotate + 45, rotate + 90, rotate + 90,rotate + 135, rotate + 135, rotate + 180, rotate + 180, rotate + 225, rotate + 225, rotate + 270, rotate + 270, rotate + 315, rotate + 315, rotate + 360, rotate + 360],
                             }}
                             transition={{
                               repeat: Infinity,
                               duration: 10,
                             }} key={alt}>
-                          <div className="inline-flex size-10 md:size-14 items-center justify-center border border-[var(--color-border)] rounded-lg absolute left-0 top-1/2 -translate-x-1/2 -translate-y-1/2 -rotate-0 bg-gray-950" style={{transform: "translate(-50%,-50%) rotate(-0deg)"}}>
+                          <motion.div animate={{ 
+                            rotate: [- rotate, - rotate - 45, - rotate - 45, - rotate - 90, - rotate - 90,- rotate - 135, - rotate - 135, - rotate - 180, - rotate - 180, - rotate - 225, - rotate - 225, - rotate - 270, - rotate - 270, - rotate - 315, - rotate - 315, - rotate - 360, - rotate - 360],}} transition={{ repeat: Infinity, duration: 10,}} initial={{translate: `-50%,-50%`, rotate: -rotate}} className="inline-flex size-10 md:size-14 items-center justify-center border border-[var(--color-border)] rounded-lg absolute left-0 top-1/2 -translate-x-1/2 -translate-y-1/2 -rotate-0 bg-gray-950">
                           <Image src={src} alt={alt} className="size-6 md:size-9" />
-                          </div>
+                          </motion.div>
                         </motion.div>
                     ))}
 
@@ -141,7 +139,7 @@ export const Features = () => {
               </div>
             </div>
 
-            <Button variant="primary" className="mt-5 ">Try it Now!</Button>
+            <Button variant="secondary" className="mt-5 ">Try it Now!</Button>
           </SectionContent>
         </SectionBorder>
     </div>

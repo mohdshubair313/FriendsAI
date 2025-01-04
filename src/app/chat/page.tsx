@@ -13,14 +13,16 @@ import {
 } from "@/components/ui/select"
 import { SendIcon } from "lucide-react";
 import underlineImage from "@/assets/images/underline.svg?url";
-import Loader from "@/components/Loader";
+import Loader from "@/components/Loader"
+import ChatLoader from "./ChatLoader";
 
 
-export default function ChatPage() {
+export default function ChatPage({user}:{user:any}) {
   const [mood, setMood] = useState("Motivated");
   const [newMessage, setNewMessage] = useState("");
   const [messages, setMessages] = useState<{ userMessage: string; botResponse: any }[]>([]);
-  const [loading, setloading] = useState(false);
+  const [isChatloading, setisChatloading] = useState(true);
+  const [ispageloader, setispageloader] = useState(true);
 
   // Fetch chat history on page load
   useEffect(() => {
@@ -32,10 +34,22 @@ export default function ChatPage() {
     fetchChatHistory();
   }, []);
 
+  useEffect(() => {
+          const timer = setTimeout(() => {
+            setispageloader(false);
+          }, 1000);
+          return () => clearTimeout(timer);
+      }, []);
+  
+      // If the loading state is true, show a loading screen means if still loading then show the loading screen
+      if(ispageloader) {
+          return <Loader />
+      }
+
   const sendMessage = async () => {
     if (!newMessage.trim()) return;
 
-    setloading(true); // Show loader
+    setisChatloading(false); // Show loader
     setMessages((prev) => [
       ...prev,
       { userMessage: newMessage, botResponse: null }, // Add a placeholder for the bot response
@@ -64,7 +78,7 @@ export default function ChatPage() {
         )
       );
     } finally {
-      setloading(false); // Hide loader
+      setisChatloading(true); // Hide loader
     }
 
     setNewMessage(""); // Clear input field
@@ -74,12 +88,28 @@ export default function ChatPage() {
     setMood(value);
   };
 
+  const formatBotResponse = (botResponse: any): string | TrustedHTML => {
+    if (!botResponse) return "";
+  
+    // Convert the response to a clean and HTML-friendly format
+    const formattedText = String(botResponse)
+      // Replace "**bold**" with <strong>bold</strong>
+      .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+      // Replace newlines (\n) with HTML line breaks (<br>)
+      .replace(/\n/g, "<br>")
+      // Replace consecutive spaces with non-breaking spaces
+      .replace(/ {2,}/g, (match) => "&nbsp;".repeat(match.length));
+  
+    return formattedText;
+  };
+  
+
   return (
     <div className="h-screen flex flex-col bg-gray-950 text-white">
       {/* Header */}
       <div className="p-4 bg-gray-800">
         <div className="flex justify-between items-center">
-          <Select onValueChange={setMood} value={mood}>
+          <Select onValueChange={setMoodHandler} value={mood}>
             <SelectTrigger className="w-[180px]">
               <SelectValue placeholder="Select a Mood" />
             </SelectTrigger>
@@ -113,6 +143,8 @@ export default function ChatPage() {
       <div className="flex-1 overflow-y-auto p-4">
         {messages.map((message, index) => (
           <div key={index} className="mb-4">
+            {/* add profile pic here so that user can feel as a chat with ai friend */}
+
             <div className="font-bold">You:</div>
             <br />
             <div>{message.userMessage}</div>
@@ -120,9 +152,12 @@ export default function ChatPage() {
             <div className="font-bold mt-2">Friend AI:</div>
             <br />
             {message.botResponse === null ? (
-              <Loader/>
+              <ChatLoader/>
             ) : (
-              <div>{message.botResponse}</div>
+              <div
+                  style={{ whiteSpace: "normal", wordWrap: "break-word" }}
+                 dangerouslySetInnerHTML={{ __html: formatBotResponse(message.botResponse) }}>
+              </div>
             )
           }
           </div>
@@ -140,7 +175,7 @@ export default function ChatPage() {
         />
         <button
           onClick={sendMessage}
-          className="ml-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded"
+          className="ml-2 px-4 py-2 hover:bg-purple-500 text-white rounded"
         >
           <SendIcon fill="#26A69A" color="#FFCA28" />
         </button>

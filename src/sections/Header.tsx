@@ -57,7 +57,7 @@ export const Header = () => {
         <div className="h-full hidden lg:block">
             <nav className="h-full">
               {navItems.map(({href,name}) => (
-                <a href={href}  key={href} className="h-full px-10 relative font-bold text-xs tracking-widest text-gray-400 uppercase inline-flex items-center before:content-[''] before:absolute before:bottom-0 before:h-2 before:w-px before:bg-gray-200/20 before:left-0 last:after:absolute last:after:bottom-0 last:after:h-2 last:after:w-px last:after:bg-gray-200/20 last:after:right-0">
+                <a href={href}  key={href} className="relative h-full px-6 py-2 rounded-full bg-gray-950 font-bold text-xs tracking-widest text-gray-500 uppercase inline-flex items-center transition-transform duration-300 hover:scale-105 hover:bg-gradient-to-r hover:from-amber-300 hover:via-teal-300 hover:to-fuchsia-400 hover:text-transparent hover:bg-clip-text">
                     {name}
                 </a>
               ))}
