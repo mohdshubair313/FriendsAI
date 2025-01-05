@@ -16,6 +16,12 @@ const Popup = () => {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-md">
       <div className="relative bg-gradient-to-br from-purple-500 to-pink-500 text-white p-6 rounded-lg shadow-xl w-[90%] max-w-md">
         
+      <button
+          onClick={closePopup}
+          className="absolute top-3 right-3 text-xl text-white hover:text-gray-300 transition"
+        >
+          ✖
+        </button>
         <h2 className="text-2xl font-bold mb-3">Welcome to Friends AI</h2>
         <p className="text-sm mb-6">
           Connect with your virtual friend! Sign up or Sign in to explore personalized conversations and mood-matching interactions.

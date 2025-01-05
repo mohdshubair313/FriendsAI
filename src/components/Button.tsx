@@ -1,6 +1,6 @@
 import { cva } from "class-variance-authority";
-import { HTMLAttributes } from "react";
 import { useRouter } from "next/navigation";
+import { HTMLAttributes } from "react";
 
 export type ButtonProp = {
   variant?: 'primary' | 'secondary' | 'tertiary'; block?: boolean; disabled?: boolean;
@@ -26,7 +26,7 @@ const classes = cva(
   }
 );
 
-const Button = ({ variant, block, className = "",children, ...otherprops }: ButtonProp) => {
+const Button = ({ variant, block ,children, ...otherprops }: ButtonProp) => {
   const router = useRouter();
 
   const gotochat = () => {

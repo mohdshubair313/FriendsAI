@@ -1,10 +1,12 @@
+export const runtime = "nodejs"; // Ensure Node.js runtime
+
 import { compare } from "bcryptjs"
 import NextAuth, { CredentialsSignin } from "next-auth"
 import CredentialsProvider from "next-auth/providers/credentials"
 import Github from "next-auth/providers/github"
 import Google from "next-auth/providers/google"
 import { User} from "./app/models/userModel"
-import { connectToDb } from "./lib/utils"
+import { connectToDb } from "./lib/db"
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   providers: [

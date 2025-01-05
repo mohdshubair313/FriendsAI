@@ -1,5 +1,5 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { connectToDb } from "@/lib/utils";
+import { connectToDb } from "@/lib/db";
 import Chat from "@/app/models/ChatModel";
 import { NextResponse } from "next/server";
 

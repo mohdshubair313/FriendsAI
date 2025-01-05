@@ -1,4 +1,4 @@
-import { connectToDb } from "@/lib/utils";
+import { connectToDb } from "@/lib/db";
 import Chat from "@/app/models/ChatModel";
 
 export async function GET() {

@@ -17,7 +17,7 @@ import Loader from "@/components/Loader"
 import ChatLoader from "./ChatLoader";
 
 
-export default function ChatPage({user}:{user:any}) {
+export default function ChatPage() {         // use this {user}:{user:any} in chatpage component as a prop from main src/page.tsx so the you can some authentication stuffs
   const [mood, setMood] = useState("Motivated");
   const [newMessage, setNewMessage] = useState("");
   const [messages, setMessages] = useState<{ userMessage: string; botResponse: any }[]>([]);

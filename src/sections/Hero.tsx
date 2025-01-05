@@ -116,7 +116,7 @@ export const Hero = () => {
                 {/* text box in the image  */}
                 <div className="absolute  left-0 z-10 top-[30%] -translate-x-10">
                   <motion.div className="bg-gray-800/70 backdrop-blur-md border-gray-700 rounded-xl p-4 w-72 " style={{y: transfromedY}}>
-                    <div>Have you met the AI friend who’s as moody as you are – but always in the best way?"</div>
+                    <div>Have you met the AI friend who’s as moody as you are – but always in the best way?</div>
                     <div className="text-right text-gray-400 text-sm font-semibold">Check it Out!</div>
                   </motion.div>
                 </div>

@@ -1,21 +1,19 @@
 "use client";
 
-import SectionBorder from "@/components/SectionBorder";
-import SectionContent from "@/components/SectionContent";
 import underlineImage from "@/assets/images/underline.svg";
 import Button from "@/components/Button";
-import React from "react";
+import Logo from "@/components/Logo";
+import SectionBorder from "@/components/SectionBorder";
+import SectionContent from "@/components/SectionContent";
 import { FloatingDock } from "@/components/ui/floating-dock";
 import {
-  IconMoodPuzzled,
-  IconMoodWrrr,
-  IconMoodHappy,
-  IconMoodEmptyFilled,
-  IconMoodTongueWink2,
   IconMoodConfuzed,
+  IconMoodEmptyFilled,
+  IconMoodHappy,
+  IconMoodPuzzled,
+  IconMoodTongueWink2,
+  IconMoodWrrr,
 } from "@tabler/icons-react";
-import Image from "next/image";
-import Logo from "@/components/Logo";
 
 export const CallToAction = () => {
 

@@ -6,6 +6,7 @@
     "strict": true,
     "noEmit": true,
     "esModuleInterop": true,
+    "target": "ES2022",           // Target ECMAScript 2022 or later
     "module": "esnext",
     "moduleResolution": "bundler",
     "resolveJsonModule": true,

@@ -18,7 +18,7 @@ import { toast } from "sonner";
 import { useForm, FormProvider } from "react-hook-form"; // Import useForm
 
 
-const page = () => {
+const Page = () => {
 
     const form = useForm({
         defaultValues: {
@@ -87,4 +87,4 @@ const page = () => {
   )
 }
 
-export default page
+export default Page
