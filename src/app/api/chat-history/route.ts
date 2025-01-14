@@ -1,3 +1,5 @@
+export const runtime = 'edge'; // Avoid Node.js specific code for APIs
+
 import { connectToDb } from "@/lib/db";
 import Chat from "@/app/models/ChatModel";
 
