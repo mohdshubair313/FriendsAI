@@ -70,7 +70,7 @@ const FloatingDockMobile = ({
                 <Link
                   href={item.href}
                   key={item.title}
-                  className="h-20 w-20 rounded-full bg-gray-50 dark:bg-neutral-900 flex items-center justify-center"
+                  className="h-20 w-20 rounded-full bg-gray-750 dark:bg-neutral-900 flex items-center justify-center"
                 >
                   <div className="h-10 w-10">{item.icon}</div>
                 </Link>
@@ -174,7 +174,7 @@ function IconContainer({
         style={{ width, height }}
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
-        className="aspect-square rounded-full bg-gray-200 dark:bg-neutral-800 flex items-center justify-center relative"
+        className="aspect-square rounded-full bg-gray-700 dark:bg-neutral-800 flex items-center justify-center relative"
       >
         <AnimatePresence>
           {hovered && (

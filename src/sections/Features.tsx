@@ -10,7 +10,6 @@ import thinkingMood from "../assets/images/thinking.png"
 import sadMood from "../assets/images/sad.png"
 import SectionBorder from "@/components/SectionBorder";
 import SectionContent from "@/components/SectionContent";
-import Button from "@/components/Button";
 import Orbit from "@/components/Orbit";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faCircleCheck } from "@fortawesome/free-solid-svg-icons";
@@ -18,6 +17,8 @@ import Logo from "@/components/Logo";
 import Image from "next/image";
 import { motion } from "framer-motion";
 import { TypewriterEffectSmooth } from "@/components/ui/typewriter-effect";
+import { Button } from "@/components/ui/button"
+import Link from "next/link"
 
 const words = [
   {
@@ -139,7 +140,8 @@ export const Features = () => {
               </div>
             </div>
 
-            <Button variant="secondary" className="mt-5 ">Try it Now!</Button>
+            <Link href="/chat">
+            <Button variant="secondary" className="mt-5">Try it Now!</Button></Link>
           </SectionContent>
         </SectionBorder>
     </div>

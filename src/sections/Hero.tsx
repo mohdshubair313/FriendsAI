@@ -3,13 +3,14 @@
 import FaceImage from "@/assets/images/Face.jpg";
 import Loader from "@/assets/images/loader-animated.svg";
 import underlineImage from "@/assets/images/underline.svg?url";
-import Button from "@/components/Button";
 import Orbit from "@/components/Orbit";
 import { Planet } from "@/components/Planet";
 import SectionBorder from "@/components/SectionBorder";
 import SectionContent from "@/components/SectionContent";
+import { Button } from "@/components/ui/button";
 import { motion, useMotionValue, useScroll, useSpring, useTransform } from "framer-motion";
 import Image from "next/image";
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
 
@@ -83,8 +84,8 @@ export const Hero = () => {
               </div>
             </div>
             <h1 className="text-4xl md:text-5xl font-semibold text-gray-100 text-center leading-tight">
-              Building dreams, fixing bugs, chasing deadlines – when was the last time you shared how you feel? <br /> Talk with {" "} 
-              <span className="relative mt-2">
+              <p className="">Building dreams, fixing bugs, chasing deadlines – when was the last time you shared how you feel? </p><br /> Talk with {" "} 
+              <span className="relative">
                  <span>Friends AI</span>
                 <span
                   className="absolute w-full left-0 top-full -translate-y-1/2 h-4 bg-gradient-to-r from-amber-300 via-teal-300 to-fuchsia-400"
@@ -101,9 +102,11 @@ export const Hero = () => {
             Connecting with others is hard, connecting with FriendsAI is effortless. Let us match your mood today.{" "}
             </p>
             <div className="flex justify-center mt-10 font-sans">
-                <Button variant="secondary" className="mt-10 transition-all hover:scale-100">
-                  Start Exploring
-                </Button>
+              <Link href="/chat">
+                  <Button variant="secondary" className="mt-10 transition-all hover:scale-100">
+                    Start Exploring
+                  </Button>
+                </Link>
             </div>
 
             <div className="relative isolate max-w-5xl mx-auto">

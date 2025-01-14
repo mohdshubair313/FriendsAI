@@ -1,7 +1,7 @@
 "use client";
 import Script from "next/script";
 import React, { useState } from "react";
-import Button from "@/components/Button";
+import { Button } from "@/components/ui/button";
 import SectionBorder from "@/components/SectionBorder";
 import SectionContent from "@/components/SectionContent";
 import { twMerge } from "tailwind-merge";
@@ -9,6 +9,8 @@ import { ButtonProp } from "@/components/Button";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faCheckCircle } from "@fortawesome/free-solid-svg-icons";
 import { useRouter } from "next/navigation";
+import Loader from "@/assets/images/loader-animated.svg";
+import Link from "next/link";
 
 export const pricingTiers = [
   {
@@ -16,7 +18,6 @@ export const pricingTiers = [
     description: "Your everyday AI friend to chat and vibe with.",
     price: "Free",
     buttonText: "Get Started",
-    buttonVariant: "secondary",
     features: [
       "Access to Friends AI for natural conversations",
       "Mood-based chat adaptation (Motivator, Supportive, Friendly)",
@@ -31,7 +32,6 @@ export const pricingTiers = [
     description: "Unlock the full potential of your AI friend.",
     price: 99,
     buttonText: "Upgrade to Premium",
-    buttonVariant: "tertiary",
     features: [
       "All Companion Plan features included",
       "Unlimited message history and chat access",
@@ -48,7 +48,6 @@ export const pricingTiers = [
     description: "Your personal AI companion, always by your side.",
     price: null,
     buttonText: "Contact Us",
-    buttonVariant: "primary",
     features: [
       "All Best Friend Plan features included",
       "Deep emotional support for mental well-being",
@@ -163,19 +162,21 @@ export const Pricing = () => {
 
                   {tier.title === "Premium" ? (
                     <Button
-                      className="mt-8"
-                      block
-                      variant={tier.buttonVariant}
+                      className="mt-8 inline-flex h-12 animate-shimmer items-center justify-center rounded-md border border-slate-800 bg-[linear-gradient(110deg,#000103,45%,#1e2631,55%,#000103)] bg-[length:200%_100%] px-6 font-medium text-slate-400 transition-colors focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 focus:ring-offset-slate-50 hover:text-gray-200"
+                      variant="ghost"
                       onClick={handlePayment}
                       disabled={isProcessing}
                     >
-                      {isProcessing ? "Processing..." : tier.buttonText}
+                      {isProcessing ? <Loader className="text-violet-400 text-border font-bold" /> : tier.buttonText}
                     </Button>
                   ) : (
-                    <Button className="mt-8" block variant={tier.buttonVariant}>
-                      {tier.buttonText}
-                    </Button>
+                    <Link href={tier.buttonText === 'Contact Us' ? "/feedback" : '/chat'}>
+                      <Button className="mt-8" variant="secondary">
+                        {tier.buttonText}
+                      </Button>
+                    </Link>
                   )}
+
                   <ul className="flex flex-col gap-4 mt-8">
                     {tier.features.map((feature) => (
                       <li

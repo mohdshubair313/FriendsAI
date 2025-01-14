@@ -89,3 +89,17 @@
 }
 
 
+
+.markdown ul li {
+    margin-bottom: 10px; /* Space between unordered list items */
+  }
+  
+  .markdown ol li {
+    margin-bottom: 10px; /* Space between ordered list items */
+  }
+  
+  .markdown hr {
+    margin: 20px 0; /* Space before and after horizontal line */
+    border: 1px solid #ddd; /* For better visibility of separator */
+  }
+  

@@ -10,9 +10,12 @@ import Hero from "@/sections/Hero";
 import Pricing from "@/sections/Pricing";
 import Testimonials from "@/sections/Testimonials";
 import Popup from "@/components/popup";
-import Loader from "@/components/Loader"
+import { Loader } from "@/components/Loader"
+import { useSession } from "@/context/SessionContext";
 
-export default function ClientHomepage({user}: {user: any}) {
+export default function ClientHomepage() {
+    const session = useSession();
+    console.log(session);
     const [isloading, setIsLoading] = useState(true);
 
     useEffect(() => {
@@ -30,7 +33,7 @@ export default function ClientHomepage({user}: {user: any}) {
   return (
     <>
     {/* If the user is logged in, show the homepage without the popup */}
-    {user ? (
+    {session ? (
         <>
         <Header />
         <Hero />

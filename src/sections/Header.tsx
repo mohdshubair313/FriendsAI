@@ -6,6 +6,9 @@ import { twMerge } from "tailwind-merge";
 import { useState } from "react";
 import Orbit from "@/components/Orbit";
 import Logo from "@/components/Logo";
+import { useSession } from "@/context/SessionContext";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { signOut } from "next-auth/react";
 
 export const navItems = [
   {
@@ -24,7 +27,7 @@ export const navItems = [
 
 export const loginItems = [
   {
-    buttonVariant: "tertiary",
+    buttonVariant: "primary",
     name: "Login",
     href: "/signin",
   },
@@ -41,6 +44,9 @@ export const loginItems = [
 
 export const Header = () => {
     const [ismobileNavOpen, setismobileNavOpen ] = useState(false)
+    const session = useSession();
+    const isAuthenticated = session?.user;
+
   return (
     <>
     <header className="border-b border-gray-200/20 relative z-40">
@@ -50,7 +56,7 @@ export const Header = () => {
         <div className="flex gap-4 items-center">
         {/* this div is for the logo */}
           <Logo />
-          <div className="font-extrabold text-2xl">Friends AI</div>
+          <div className="font-extrabold tex+ t-2xl">Friends AI</div>
         </div>
 
         {/* // center side div for center side content for when the laptop or tab view is there and other options are see */}
@@ -65,11 +71,28 @@ export const Header = () => {
         </div>
 
         <div className="hidden lg:flex gap-4">
-          {loginItems.map(({ buttonVariant, name, href}) => (
+         {/* // If user is authenicated then show the users profile pic and logout button */}
+
+         {isAuthenticated ? (
+          <>
+          <Avatar>
+            <AvatarImage  />
+            <AvatarFallback>CN</AvatarFallback>
+          </Avatar>
+          <button className="p-[3px] relative" onClick={() => signOut({callbackUrl: "/"})}>
+          <div className="absolute inset-0 bg-gradient-to-r from-amber-300 via-teal-300 to-fuchsia-400 rounded-lg" />
+            <div className="px-8 py-2  bg-black rounded-[6px]  relative group transition duration-200 text-white hover:bg-transparent">
+              Sign Out
+            </div>
+          </button>
+          </>
+         ): (
+          loginItems.map(({ buttonVariant, name, href }) => (
             <a href={href} key={name}>
-            <Button variant={buttonVariant}>{name}</Button>
+              <Button variant={buttonVariant}>{name}</Button>
             </a>
-          ))}
+          ))
+         )}
         </div>
 
         {/* // right side div for right side content like buttons or hamburger button for small screens */}
@@ -109,7 +132,7 @@ export const Header = () => {
       <div className="container h-full">
         <nav className="flex flex-col items-center gap-4 py-8 h-full justify-center">
           {navItems.map(({name, href}) => (
-            <a href={href} key={name} className="text-gray-400 uppercase tracking-widest font-bold text-xs h-10">
+            <a href={href} key={name} className="relative h-12 px-6 rounded-full font-bold text-xs tracking-widest text-gray-500 uppercase inline-flex items-center transition-transform duration-300 hover:scale-105 hover:bg-gradient-to-r hover:from-amber-300 hover:via-teal-300 hover:to-fuchsia-400 hover:text-transparent hover:bg-clip-text">
                 {name}
             </a>
           ))}

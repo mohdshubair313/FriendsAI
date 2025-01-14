@@ -2,6 +2,11 @@
 
 import { useState, useEffect } from "react";
 import axios from "axios";
+import ReactMarkdown from "react-markdown";
+import remarkParse from "remark-parse";
+import remarkRehype from "remark-rehype";
+import rehypeRaw from "rehype-raw";
+import rehypeStringify from "rehype-stringify";
 import {
   Select,
   SelectContent,
@@ -10,17 +15,21 @@ import {
   SelectLabel,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select"
+} from "@/components/ui/select";
 import { SendIcon } from "lucide-react";
 import underlineImage from "@/assets/images/underline.svg?url";
-import Loader from "@/components/Loader"
+import { Loader } from "@/components/Loader";
 import ChatLoader from "./ChatLoader";
+import { useSession } from "@/context/SessionContext";
+import Popup from "@/components/popup";
+import { useRouter } from "next/navigation";
 
-
-export default function ChatPage() {         // use this {user}:{user:any} in chatpage component as a prop from main src/page.tsx so the you can some authentication stuffs
+export default function ChatPage() {
   const [mood, setMood] = useState("Motivated");
   const [newMessage, setNewMessage] = useState("");
-  const [messages, setMessages] = useState<{ userMessage: string; botResponse: any }[]>([]);
+  const [messages, setMessages] = useState<
+    { userMessage: string; botResponse: string | null }[]
+  >([]);
   const [isChatloading, setisChatloading] = useState(true);
   const [ispageloader, setispageloader] = useState(true);
 
@@ -35,16 +44,15 @@ export default function ChatPage() {         // use this {user}:{user:any} in ch
   }, []);
 
   useEffect(() => {
-          const timer = setTimeout(() => {
-            setispageloader(false);
-          }, 1000);
-          return () => clearTimeout(timer);
-      }, []);
-  
-      // If the loading state is true, show a loading screen means if still loading then show the loading screen
-      if(ispageloader) {
-          return <Loader />
-      }
+    const timer = setTimeout(() => {
+      setispageloader(false);
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  if (ispageloader) {
+    return <Loader />;
+  }
 
   const sendMessage = async () => {
     if (!newMessage.trim()) return;
@@ -56,9 +64,11 @@ export default function ChatPage() {         // use this {user}:{user:any} in ch
     ]);
 
     try {
+      const maxLength = 300;
       const response = await axios.post("/api/generate", {
         mood,
         userMessage: newMessage,
+        maxLength: maxLength,
       });
 
       setMessages((prev) =>
@@ -88,98 +98,105 @@ export default function ChatPage() {         // use this {user}:{user:any} in ch
     setMood(value);
   };
 
-  const formatBotResponse = (botResponse: any): string | TrustedHTML => {
-    if (!botResponse) return "";
-  
-    // Convert the response to a clean and HTML-friendly format
-    const formattedText = String(botResponse)
-      // Replace "**bold**" with <strong>bold</strong>
-      .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
-      // Replace newlines (\n) with HTML line breaks (<br>)
-      .replace(/\n/g, "<br>")
-      // Replace consecutive spaces with non-breaking spaces
-      .replace(/ {2,}/g, (match) => "&nbsp;".repeat(match.length));
-  
-    return formattedText;
-  };
-  
+  const session = useSession();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!session) {
+      router.push("/signup");
+    }
+  }, [session, router]);
 
   return (
-    <div className="h-screen flex flex-col bg-gray-950 text-white">
-      {/* Header */}
-      <div className="p-4 bg-gray-800">
-        <div className="flex justify-between items-center">
-          <Select onValueChange={setMoodHandler} value={mood}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Select a Mood" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectGroup>
-                <SelectLabel>Moods</SelectLabel>
-                <SelectItem value="Motivated">Motivated 😤</SelectItem>
-                <SelectItem value="Excited">Excited 🤩</SelectItem>
-                <SelectItem value="Lover">Lover 🥰</SelectItem>
-                <SelectItem value="Friendly">Friendly 🤗</SelectItem>
-                <SelectItem value="Supportive">Supportive 🤝</SelectItem>
-              </SelectGroup>
-            </SelectContent>
-          </Select>
-          <h2 className="text-2xl relative">
-            Friends AI
-            <span
-              className="absolute w-full left-0 top-full h-4 bg-gradient-to-r from-amber-300 via-teal-300 to-fuchsia-400"
-              style={{
-                maskImage: `url(${underlineImage.src})`,
-                maskSize: "contain",
-                maskPosition: "center",
-                maskRepeat: "no-repeat",
-              }}
-            ></span>
-          </h2>
-        </div>
+   <div>
+    {session ? (
+       <div className="h-screen flex flex-col bg-gray-950 text-white">
+       {/* Header */}
+       <div className="p-4 bg-gray-800 shadow-md">
+         <div className="flex justify-between items-center">
+           <Select onValueChange={setMoodHandler} value={mood}>
+             <SelectTrigger className="w-[180px]">
+               <SelectValue placeholder="Select a Mood" />
+             </SelectTrigger>
+             <SelectContent>
+               <SelectGroup>
+                 <SelectLabel>Moods</SelectLabel>
+                 <SelectItem value="Motivated">Motivated 😤</SelectItem>
+                 <SelectItem value="Excited">Excited 🤩</SelectItem>
+                 <SelectItem value="Lover">Lover 🥰</SelectItem>
+                 <SelectItem value="Friendly">Friendly 🤗</SelectItem>
+                 <SelectItem value="Supportive">Supportive 🤝</SelectItem>
+               </SelectGroup>
+             </SelectContent>
+           </Select>
+           <h2 className="text-2xl relative font-semibold">
+             Friends AI
+             <span
+               className="absolute w-full left-0 top-full h-4 bg-gradient-to-r from-amber-300 via-teal-300 to-fuchsia-400"
+               style={{
+                 maskImage: `url(${underlineImage.src})`,
+                 maskSize: "contain",
+                 maskPosition: "center",
+                 maskRepeat: "no-repeat",
+               }}
+             ></span>
+           </h2>
+         </div>
+       </div>
+ 
+       {/* Chat History */}
+       <div className="flex-1 overflow-y-auto p-4">
+         {messages.map((message, index) => (
+           <div
+             key={index}
+             className="mb-6 p-4 border border-gray-700 rounded-lg bg-gray-900"
+           >
+             {/* User Message */}
+             <div className="font-bold text-blue-400 mb-1">You:</div>
+             <div className="text-gray-300">{message.userMessage}</div>
+ 
+             {/* Divider */}
+             <hr className="my-4 border-gray-700" />
+ 
+             {/* Bot Response */}
+             <div className="font-bold text-green-400 mt-2">Friend AI:</div>
+             {message.botResponse === null ? (
+               <ChatLoader />
+             ) : (
+               <ReactMarkdown
+                 className="prose prose-invert"
+                 children={message.botResponse}
+                 remarkPlugins={[remarkParse, remarkRehype]}
+                 rehypePlugins={[rehypeRaw, rehypeStringify]}
+               />
+             )}
+           </div>
+         ))}
+       </div>
+ 
+       {/* Input Box */}
+       <div className="p-4 bg-gray-800 flex">
+         <input
+           type="text"
+           value={newMessage}
+           onChange={(e) => setNewMessage(e.target.value)}
+           placeholder="Type your message..."
+           className="flex-1 p-3 rounded bg-gray-700 text-white border border-gray-600 focus:ring focus:ring-purple-500"
+         />
+         <button
+           onClick={sendMessage}
+           className="ml-3 px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded shadow-md flex items-center"
+         >
+           <SendIcon className="w-5 h-5 mr-2" />
+           Send
+         </button>
+       </div>
+     </div>
+    ) : (
+      <div>
+        <Popup />
       </div>
-
-      {/* Chat History */}
-      <div className="flex-1 overflow-y-auto p-4">
-        {messages.map((message, index) => (
-          <div key={index} className="mb-4">
-            {/* add profile pic here so that user can feel as a chat with ai friend */}
-
-            <div className="font-bold">You:</div>
-            <br />
-            <div>{message.userMessage}</div>
-            <hr /> <br />
-            <div className="font-bold mt-2">Friend AI:</div>
-            <br />
-            {message.botResponse === null ? (
-              <ChatLoader/>
-            ) : (
-              <div
-                  style={{ whiteSpace: "normal", wordWrap: "break-word" }}
-                 dangerouslySetInnerHTML={{ __html: formatBotResponse(message.botResponse) }}>
-              </div>
-            )
-          }
-          </div>
-        ))}
-      </div>
-
-      {/* Input Box */}
-      <div className="p-4 bg-gray-800 flex">
-        <input
-          type="text"
-          value={newMessage}
-          onChange={(e) => setNewMessage(e.target.value)}
-          placeholder="Type your message..."
-          className="flex-1 p-2 rounded bg-gray-700 text-white"
-        />
-        <button
-          onClick={sendMessage}
-          className="ml-2 px-4 py-2 hover:bg-purple-500 text-white rounded"
-        >
-          <SendIcon fill="#26A69A" color="#FFCA28" />
-        </button>
-      </div>
-    </div>
+    )}
+   </div>
   );
 }

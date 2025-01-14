@@ -69,8 +69,12 @@ module.exports = {
   				}
   			},
 			  shimmer: {
-				"0%": { transform: "translateX(-100%)" },
-          		"100%": { transform: "translateX(100%)" },
+				from: {
+					"backgroundPosition": "0 0"
+				  },
+				  to: {
+					"backgroundPosition": "-200% 0"
+				  }
 			},
   		},
   		animation: {
@@ -128,7 +132,8 @@ module.exports = {
   },
   plugins: [
     addVariablesForColors,
-      require("tailwindcss-animate")
+      require("tailwindcss-animate"),
+	  require("@tailwindcss/typography")
 ],
 };
 

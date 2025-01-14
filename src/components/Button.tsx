@@ -14,9 +14,9 @@ const classes = cva(
         true: "w-full",
       },
       variant: {
-        primary: 'border-gradient text-black hover:scale-105 transition-all duration-300',
+        primary: 'border-gradient relative inline-block px-6 py-3 font-semibold text-black bg-white rounded-md hover:scale-105 transition-transform duration-300',
         secondary: 'bg-gray-100 text-gray-950 font-poppins border border-transparent',
-        tertiary: 'bg-gray-800 text-gray',
+        tertiary: 'shadow-[0_0_0_3px_#000000_inset] px-6 py-2 bg-transparent border border-black border-white text-white text-black rounded-lg font-bold transform hover:-translate-y-1 transition duration-400',
       },
     },
     defaultVariants: {

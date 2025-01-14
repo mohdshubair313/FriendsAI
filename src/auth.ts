@@ -7,6 +7,18 @@ import Github from "next-auth/providers/github"
 import Google from "next-auth/providers/google"
 import { User} from "./app/models/userModel"
 import { connectToDb } from "./lib/db"
+import { getSession } from "next-auth/react";
+
+export const sessionmethod = async () => {
+  try {
+    const session = await getSession(); // client-side safe function
+    console.log(session?.user)
+    return session;
+  } catch (error) {
+    console.error("Error fetching session from auth.ts:", error);
+    return null; // Return null if no session is available
+  }
+};
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   providers: [
@@ -65,6 +77,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     })
   ],
   pages: {
-    signIn: "/signin",
+    signIn: "/",
   },
 })
