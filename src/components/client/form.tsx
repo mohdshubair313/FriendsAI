@@ -3,7 +3,7 @@ import { toast } from "sonner"
 import credentialsLogin  from "@/action/login"
 import { useRouter } from "next/navigation"
 
-const loginForm = () => {
+const LoginForm = () => {
   const router = useRouter();
 
     return (
@@ -55,4 +55,4 @@ const loginForm = () => {
     )
 }
 
-export default loginForm
+export default LoginForm

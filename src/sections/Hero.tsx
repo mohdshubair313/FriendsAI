@@ -38,7 +38,7 @@ const useMousePosition = () => {
       clientX.set(e.clientX);
       clientY.set(e.clientY)
     })
-  }, [])
+  }, [clientX,clientY])
 
   return {xProgress, yProgress} 
 };

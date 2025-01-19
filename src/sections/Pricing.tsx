@@ -1,4 +1,5 @@
 "use client";
+
 import Script from "next/script";
 import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -72,8 +73,36 @@ export const pricingTiers = [
 
 declare global {
   interface Window {
-    Razorpay: any;
+    Razorpay: new (options: RazorpayOptions) => RazorpayInstance;
   }
+}
+
+interface RazorpayOptions {
+  key: string;
+  amount: number;
+  currency: string;
+  name: string;
+  description: string;
+  order_id: string;
+  handler: (response: RazorpayResponse) => void;
+  prefill: {
+    name: string;
+    email: string;
+    contact: string;
+  };
+  theme: {
+    color: string;
+  };
+}
+
+interface RazorpayResponse {
+  razorpay_payment_id: string;
+  razorpay_order_id: string;
+  razorpay_signature: string;
+}
+
+interface RazorpayInstance {
+  open: () => void;
 }
 
 export const Pricing = () => {
@@ -88,14 +117,14 @@ export const Pricing = () => {
       const response = await fetch("/api/create-order", { method: "POST" });
       const data = await response.json();
 
-      const options = {
-        key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
+      const options: RazorpayOptions = {
+        key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || "",
         amount: AMOUNT * 100, // Razorpay expects the amount in paise (₹99.00 * 100)
         currency: "INR",
         name: "Friends AI",
         description: "Upgrade to Premium",
         order_id: data.orderId,
-        handler: function (response: any) {
+        handler: function (response: RazorpayResponse) {
           console.log("Payment successful", response);
           // Redirect to premium page
           router.push("/premium");

@@ -1,19 +1,21 @@
 import mongoose from "mongoose";
 
-let isConnected = false; // Track the connection
+let isConnected = false; // Global flag to track connection
 
 export const connectToDb = async () => {
-  if (isConnected) return;
+  if (isConnected) {
+    console.log("MongoDB already connected!");
+    return;
+  }
 
-  if (mongoose.connection.readyState === 0) {
-    try {
-      const db = await mongoose.connect(process.env.MONGODB_URI as string, {
-      });
-      isConnected = db.connection.readyState === 1; // Set connection flag
-      console.log("Connected to MongoDB");
-    } catch (error) {
-      console.error("MongoDB connection error:", error);
-      throw error;
-    }
+  try {
+    // Connect without deprecated options
+    const db = await mongoose.connect(process.env.MONGODB_URI as string);
+
+    isConnected = db.connection.readyState === 1; // 1 means connected
+    console.log("Connected to MongoDB!");
+  } catch (error) {
+    console.error("Failed to connect to MongoDB:", error);
+    throw error; // Throw error to handle it in API or middleware
   }
 };

@@ -30,9 +30,8 @@ export const TextRevealCard = ({
     }
   }, []);
 
-  function mouseMoveHandler(event: any) {
+  function mouseMoveHandler(event: React.MouseEvent<HTMLDivElement>) {
     event.preventDefault();
-
     const { clientX } = event;
     if (cardRef.current) {
       const relativeX = clientX - left;
@@ -49,7 +48,7 @@ export const TextRevealCard = ({
   }
   function touchMoveHandler(event: React.TouchEvent<HTMLDivElement>) {
     event.preventDefault();
-    const clientX = event.touches[0]!.clientX;
+    const clientX = event.touches[0].clientX;
     if (cardRef.current) {
       const relativeX = clientX - left;
       setWidthPercentage((relativeX / localWidth) * 100);
