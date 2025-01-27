@@ -1,6 +1,6 @@
 
 
-import mongoose, { Schema, models, model } from 'mongoose';
+import { Schema, models, model } from 'mongoose';
 
 const chatSchema = new Schema({
     mood: { type: String, required: true },
