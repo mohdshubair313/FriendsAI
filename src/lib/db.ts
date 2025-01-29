@@ -1,3 +1,5 @@
+export const runtime = "nodejs";
+
 import mongoose from "mongoose";
 
 let isConnected = false; // Global flag to track connection
