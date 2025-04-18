@@ -53,8 +53,9 @@ export const Hero = () => {
   });
   const transfromedY = useTransform(scrollYProgress, [0,1], [200, -200])
 
-  const springX = useSpring(xProgress)
-  const springY = useSpring(yProgress)
+  const springX = useSpring(xProgress, { damping: 15, stiffness: 100 });
+  const springY = useSpring(yProgress, { damping: 15, stiffness: 100 });
+
 
   const tranfromedLargeX = useTransform(springX, [0,1], ['-25%', '25%'])
   const transfromedLargeY = useTransform(springY, [0,1], ["-25%", "25%"])
@@ -64,7 +65,7 @@ export const Hero = () => {
     <section ref={sectionRef}>
       <div className="container">
         <SectionBorder>
-          <SectionContent className="relative isolate [mask-image:linear-gradient(to_bottom,transparent,black_10%,black_90%.transparent) ">
+          <SectionContent className="relative isolate [mask-image:linear-gradient(to_bottom,transparent,black_10%,black_90%,transparent)]">
             <div className="absolute -z-10 inset-0 bg-[radial-gradient(circle_farthest-corner,var(--color-fuchsia-900)_50%,var(--color-indigo-900)_75%,transparent)] [mask-image:radial-gradient(circle_farthest-side,black,transparent)] "></div>
             <div className="absolute inset-0 -z-10">
               <div className="absolute-center">
@@ -83,7 +84,7 @@ export const Hero = () => {
                 <Orbit className="size-[1350px]" />
               </div>
             </div>
-            <h1 className="text-4xl md:text-5xl font-semibold text-gray-100 text-center leading-tight">
+            <h1 className="text-3xl sm:text-4xl md:text-5xl font-semibold text-gray-100 text-center leading-tight max-w-4xl mx-auto">
               <p className="">Building dreams, fixing bugs, chasing deadlines – when was the last time you shared how you feel? </p><br /> Talk with {" "} 
               <span className="relative">
                  <span>Friends AI</span>
@@ -103,7 +104,7 @@ export const Hero = () => {
             </p>
             <div className="flex justify-center mt-10 font-sans">
               <Link href="/chat">
-                  <Button variant="secondary" className="mt-10 transition-all hover:scale-100">
+                  <Button className="mt-10 transition-all hover:scale-105 hover:shadow-[0_0_25px_#a78bfa] animate-pulse">
                     Start Exploring
                   </Button>
                 </Link>
@@ -124,9 +125,9 @@ export const Hero = () => {
                   </motion.div>
                 </div>
               <div className="mt-20 rounded-2xl border-2 overflow-hidden border-gradient relative">
-                <Image src={FaceImage} alt="Robot Image" />
-                <div className="absolute bottom-2 md:bottom-4 left-1/2 -translate-x-1/2 w-full px-4 ">
-                  <div className="bg-gray-950/80 items-center gap-4 px-4 py-2 rounded-2xl w-[320px] max-w-full ">
+              <div className="mt-20 rounded-2xl border-2 overflow-hidden border-gradient relative max-w-full">
+                  <Image src={FaceImage} alt="Robot Image" className="w-full h-full object-cover" />
+                  <div className="bg-gray-950/80 items-center gap-4 px-4 py-2 rounded-2xl w-[320px] max-w-full">
                     <Loader className="text-violet-400" />
                     <div className="font-semibold text-xl text-gray-100">
                       AI is generating <span className="animate-cursor-blink">|</span>{" "}

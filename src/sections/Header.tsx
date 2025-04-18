@@ -1,154 +1,122 @@
-"use client"
+// components/Header.tsx
+"use client";
 
-import Button from "@/components/Button";
-import { ButtonProp } from "@/components/Button";
-import { twMerge } from "tailwind-merge";
 import { useState } from "react";
+import { useSession } from "@/context/SessionContext";
+import { signOut } from "next-auth/react";
 import Orbit from "@/components/Orbit";
 import Logo from "@/components/Logo";
-import { useSession } from "@/context/SessionContext";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { signOut } from "next-auth/react";
+import Button from "@/components/Button";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 export const navItems = [
-  {
-    name: "Features",
-    href: "#features",
-  },
-  {
-    name: "Pricing",
-    href: "#pricing",
-  },
-  {
-    name: "Feedback",
-    href: "/feedback",
-  }
+  { name: "Features", href: "#features" },
+  { name: "Pricing", href: "#pricing" },
+  { name: "Feedback", href: "/feedback" },
 ];
 
-export const loginItems = [
-  {
-    buttonVariant: "primary",
-    name: "Login",
-    href: "/signin",
-  },
-  {
-    buttonVariant: "primary",
-    name: "Sign Up",
-    href: "/signup",
-  },
-] satisfies {
-  name: string;
-  href: string;
-  buttonVariant: ButtonProp['variant']
-}[];
+export const loginItems: { name: string; href: string; buttonVariant: 'primary' | 'secondary' | 'tertiary' }[] = [
+  { name: "Login", href: "/signin", buttonVariant: "primary" },
+  { name: "Sign Up", href: "/signup", buttonVariant: "primary" },
+];
 
 export const Header = () => {
-    const [ismobileNavOpen, setismobileNavOpen ] = useState(false)
-    const session = useSession();
-    const isAuthenticated = session?.user;
+  const [isMobileNavOpen, setMobileNavOpen] = useState(false);
+  const session = useSession();
+  const isAuthenticated = session?.user;
 
   return (
     <>
-    <header className="border-b border-gray-200/20 relative z-40">
-    <div className="container">
-      <div className="h-18 flex justify-between items-center">
-        {/* // left side div for left side content */}
-        <div className="flex gap-4 items-center">
-        {/* this div is for the logo */}
-          <Logo />
-          <div className="font-extrabold tex+ t-2xl">Friends AI</div>
-        </div>
+      <header className="fixed top-0 left-0 right-0 z-50 bg-black/70 backdrop-blur-sm border-b border-white/10">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="flex h-16 items-center justify-between">
+            {/* Logo and brand */}
+            <div className="flex items-center gap-3">
+              <Logo />
+              <span className="text-xl font-bold text-white tracking-tight">Friends AI</span>
+            </div>
 
-        {/* // center side div for center side content for when the laptop or tab view is there and other options are see */}
-        <div className="h-full hidden lg:block">
-            <nav className="h-full">
-              {navItems.map(({href,name}) => (
-                <a href={href}  key={href} className="relative h-full px-6 py-2 rounded-full bg-gray-950 font-bold text-xs tracking-widest text-gray-500 uppercase inline-flex items-center transition-transform duration-300 hover:scale-105 hover:bg-gradient-to-r hover:from-amber-300 hover:via-teal-300 hover:to-fuchsia-400 hover:text-transparent hover:bg-clip-text">
-                    {name}
+            {/* Desktop Nav */}
+            <nav className="hidden lg:flex gap-4">
+              {navItems.map(({ name, href }) => (
+                <a
+                  key={name}
+                  href={href}
+                  className="px-4 py-2 text-xs uppercase tracking-widest font-bold text-gray-400 hover:text-white transition hover:scale-105 rounded-full bg-gray-950 hover:bg-gradient-to-r hover:from-amber-300 hover:via-teal-300 hover:to-fuchsia-400 hover:text-transparent hover:bg-clip-text"
+                >
+                  {name}
                 </a>
               ))}
             </nav>
-        </div>
 
-        <div className="hidden lg:flex gap-4">
-         {/* // If user is authenicated then show the users profile pic and logout button */}
-
-         {isAuthenticated ? (
-          <>
-          <Avatar>
-            <AvatarImage  />
-            <AvatarFallback>CN</AvatarFallback>
-          </Avatar>
-          <button className="p-[3px] relative" onClick={() => signOut({callbackUrl: "/"})}>
-          <div className="absolute inset-0 bg-gradient-to-r from-amber-300 via-teal-300 to-fuchsia-400 rounded-lg" />
-            <div className="px-8 py-2  bg-black rounded-[6px]  relative group transition duration-200 text-white hover:bg-transparent">
-              Sign Out
+            {/* Auth buttons / Avatar */}
+            <div className="hidden lg:flex items-center gap-4">
+              {isAuthenticated ? (
+                <>
+                  <Avatar>
+                    <AvatarImage />
+                    <AvatarFallback>CN</AvatarFallback>
+                  </Avatar>
+                  <button
+                    className="relative px-6 py-2 rounded-md bg-black text-white group hover:bg-transparent"
+                    onClick={() => signOut({ callbackUrl: "/" })}
+                  >
+                    <span className="absolute inset-0 bg-gradient-to-r from-amber-300 via-teal-300 to-fuchsia-400 rounded-md -z-10 transition-transform scale-0 group-hover:scale-100"></span>
+                    Sign Out
+                  </button>
+                </>
+              ) : (
+                loginItems.map(({ name, href, buttonVariant }) => (
+                  <a key={name} href={href}>
+                    <Button variant={buttonVariant}>{name}</Button>
+                  </a>
+                ))
+              )}
             </div>
-          </button>
-          </>
-         ): (
-          loginItems.map(({ buttonVariant, name, href }) => (
-            <a href={href} key={name}>
-              <Button variant={buttonVariant}>{name}</Button>
-            </a>
-          ))
-         )}
-        </div>
 
-        {/* // right side div for right side content like buttons or hamburger button for small screens */}
-        <div className="flex items-center lg:hidden">
-        <button onClick={() => setismobileNavOpen((curr) => !curr)} className="relative size-10 rounded-lg bg-gradient-to-r from-amber-300 via-teal-300 to-fuchsia-400 p-0.5">
-          <div className="flex items-center justify-center w-full h-full bg-gray-800 rounded-md">
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
-              <div className={twMerge("w-4 h-0.5 bg-gray-100 -translate-y-1 transition-all duration-300 ", ismobileNavOpen && 'translate-y-0 rotate-45')}></div>
-            </div>
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
-              <div className={twMerge("w-4 h-0.5 bg-gray-100 translate-y-1 transition-all duration-300 ",ismobileNavOpen && 'translate-y-0 -rotate-45')}></div>
+            {/* Mobile Hamburger */}
+            <div className="lg:hidden">
+              <button
+                onClick={() => setMobileNavOpen(!isMobileNavOpen)}
+                className="p-2 rounded-md bg-gradient-to-r from-amber-300 via-teal-300 to-fuchsia-400"
+              >
+                <div className="w-6 h-0.5 bg-black mb-1 transition-transform duration-300 transform origin-center" style={{ transform: isMobileNavOpen ? "rotate(45deg) translateY(0.25rem)" : "none" }} />
+                <div className="w-6 h-0.5 bg-black transition-transform duration-300 transform origin-center" style={{ transform: isMobileNavOpen ? "rotate(-45deg) translateY(-0.25rem)" : "none" }} />
+              </button>
             </div>
           </div>
-        </button>
-
         </div>
-      </div>
-    </div>
-  </header>
-  {ismobileNavOpen && (
-    <div className="fixed top-18 bottom-0 right-0 left-0 bg-gray-950 z-30 overflow-hidden">
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 isolate -z-10">
-      <Orbit />
-      </div>
-      <div className="absolute-center">
-      <Orbit className="size-[350px]" />
-      </div>
-      <div className="absolute-center">
-      <Orbit className="size-[500px]" />
-      </div>
-      <div className="absolute-center">
-      <Orbit className="size-[650px]" />
-      </div>
-      <div className="absolute-center">
-      <Orbit className="size-[850px]" />
-      </div>
-      <div className="container h-full">
-        <nav className="flex flex-col items-center gap-4 py-8 h-full justify-center">
-          {navItems.map(({name, href}) => (
-            <a href={href} key={name} className="relative h-12 px-6 rounded-full font-bold text-xs tracking-widest text-gray-500 uppercase inline-flex items-center transition-transform duration-300 hover:scale-105 hover:bg-gradient-to-r hover:from-amber-300 hover:via-teal-300 hover:to-fuchsia-400 hover:text-transparent hover:bg-clip-text">
-                {name}
-            </a>
-          ))}
+      </header>
 
-          {loginItems.map(({buttonVariant, href, name}) => (
-            <a href={href} key={name} >
-              <Button block variant={buttonVariant}>{name}</Button>
-            </a>
-          ))}
-        </nav>
-      </div>
-    </div>
-  )}
+      {/* Mobile Nav */}
+      {isMobileNavOpen && (
+        <div className="fixed inset-0 z-40 bg-black/90 backdrop-blur-md px-4 py-8">
+          <div className="relative w-full h-full flex flex-col items-center justify-center gap-6 text-center">
+            <Orbit className="absolute top-0 left-0 right-0 mx-auto z-[-1] size-[500px]" />
+            {navItems.map(({ name, href }) => (
+              <a
+                key={name}
+                href={href}
+                className="text-lg font-semibold tracking-wide text-white hover:text-amber-400 transition"
+              >
+                {name}
+              </a>
+            ))}
+            {!isAuthenticated && loginItems.map(({ name, href, buttonVariant }) => (
+              <a href={href} key={name}>
+                <Button block variant={buttonVariant}>{name}</Button>
+              </a>
+            ))}
+            {isAuthenticated && (
+              <button onClick={() => signOut({ callbackUrl: "/" })} className="text-white hover:text-red-400 text-base font-semibold mt-4">
+                Sign Out
+              </button>
+            )}
+          </div>
+        </div>
+      )}
     </>
-  )
-   
+  );
 };
 
 export default Header;

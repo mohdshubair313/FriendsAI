@@ -2,43 +2,53 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { motion } from "framer-motion";
 
 const Popup = () => {
   const [isVisible, setIsVisible] = useState(true);
-
-  const closePopup = () => {
-    setIsVisible(false);
-  };
-
   if (!isVisible) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-md">
-      <div className="relative bg-gradient-to-br from-purple-500 to-pink-500 text-white p-6 rounded-lg shadow-xl w-[90%] max-w-md">
-        
-      <button
-          onClick={closePopup}
-          className="absolute top-3 right-3 text-xl text-white hover:text-gray-300 transition"
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 dark:bg-black/60 backdrop-blur-lg transition-all duration-300">
+      <motion.div
+        initial={{ scale: 0.8, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.8, opacity: 0 }}
+        className="relative w-[90%] max-w-sm sm:max-w-md md:max-w-lg p-6 sm:p-8 rounded-2xl bg-gradient-to-br from-white/70 to-white/10 dark:from-[#1e1e1e]/70 dark:to-[#1e1e1e]/10 shadow-xl border border-white/10 text-gray-900 dark:text-white backdrop-blur-2xl"
+      >
+        {/* Close Button */}
+        <button
+          onClick={() => setIsVisible(false)}
+          className="absolute top-3 right-3 text-xl text-white dark:text-white/70 hover:text-red-400 transition"
         >
           ✖
         </button>
-        <h2 className="text-2xl font-bold mb-3">Welcome to Friends AI</h2>
-        <p className="text-sm mb-6">
-          Connect with your virtual friend! Sign up or Sign in to explore personalized conversations and mood-matching interactions.
+
+        {/* Heading */}
+        <h2 className="text-2xl sm:text-3xl font-bold mb-3 text-center bg-gradient-to-r from-purple-400 to-pink-400 text-transparent bg-clip-text">
+          Welcome to Friends AI
+        </h2>
+
+        {/* Description */}
+        <p className="text-sm sm:text-base text-center mb-6 text-gray-700 dark:text-gray-300">
+          Connect with your virtual friend 🤖! Sign in or sign up to explore personalized chats & mood-matching experiences.
         </p>
-        <div className="flex justify-between">
+
+        {/* Buttons */}
+        <div className="flex flex-col gap-4 sm:flex-row sm:justify-center sm:gap-6 mt-4">
           <Link href="/signin">
-          <button className="bg-white text-purple-700 px-4 py-2 rounded-full shadow hover:bg-gray-100 transition">
-            Sign In
-          </button>
+            <button className="w-full sm:w-auto px-6 py-2 rounded-full text-white font-medium bg-gradient-to-r from-purple-600 to-indigo-500 hover:from-purple-700 hover:to-indigo-600 shadow-lg transition-all duration-300">
+              Sign In
+            </button>
           </Link>
+
           <Link href="/signup">
-            <button className="bg-white text-pink-700 px-4 py-2 rounded-full shadow hover:bg-gray-100 transition">
+            <button className="w-full sm:w-auto px-6 py-2 rounded-full text-white font-medium bg-gradient-to-r from-pink-500 to-red-400 hover:from-pink-600 hover:to-red-500 shadow-lg transition-all duration-300">
               Sign Up
             </button>
           </Link>
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 };

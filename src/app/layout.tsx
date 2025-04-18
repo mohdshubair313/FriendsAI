@@ -1,7 +1,7 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Sora, Space_Grotesk } from "next/font/google";
 import "./globals.css";
-import { Toaster } from "@/components/ui/sonner"
+import { Toaster } from "@/components/ui/sonner";
 import { SessionProvider } from "@/context/SessionContext";
 
 const soraFont = Sora({
@@ -20,6 +20,12 @@ export const metadata: Metadata = {
   description: "Created by Shubair",
 };
 
+// ✅ This should be OUTSIDE metadata
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -27,10 +33,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${soraFont.variable} ${spaceGroteskFont.variable} antialiased bg-gray-950 text-gray-300 font-body`}>
-        <SessionProvider>
-          {children}
-        </SessionProvider>
+      <body
+        className={`${soraFont.variable} ${spaceGroteskFont.variable} antialiased bg-gray-950 text-gray-300 font-body`}
+      >
+        <SessionProvider>{children}</SessionProvider>
         <Toaster />
       </body>
     </html>
