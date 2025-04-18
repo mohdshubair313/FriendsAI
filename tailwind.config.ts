@@ -3,18 +3,22 @@ import flattenColorPalette from "tailwindcss/lib/util/flattenColorPalette";
 import tailwindcssAnimate from "tailwindcss-animate";
 import tailwindTypography from "@tailwindcss/typography";
 
-const addVariablesForColors = ({ addBase, theme }: {
-  addBase: (styles: Record<string, string>) => void;
-  theme: (path: string) => Record<string, string>;
-}) => {
+function addVariablesForColors({
+  addBase,
+  theme,
+}: {
+  addBase: (base: Record<string, Record<string, string>>) => void;
+  theme: (path: string) => Record<string, string | number>;
+}) {
   const allColors = flattenColorPalette(theme("colors"));
-  const newVars = Object.fromEntries(
-    Object.entries(allColors).map(([key, val]) => [`--${key}`, val])
+  const newVars: Record<string, string> = Object.fromEntries(
+    Object.entries(allColors).map(([key, val]) => [`--${key}`, String(val)])
   );
+
   addBase({
     ":root": newVars,
   });
-};
+}
 
 const config: Config = {
   darkMode: ["class"],
