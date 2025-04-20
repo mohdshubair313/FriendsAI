@@ -62,7 +62,7 @@ export const Hero = () => {
 
   return (
     <section ref={sectionRef} className="scroll-mt-16">
-      <div className="container mx-auto px-4 sm:px-6 md:px-10 lg:px-16">
+      <div className="container mx-auto">
         <SectionBorder>
           <SectionContent className="relative isolate">
             {/* Background Orb Layers */}
@@ -76,7 +76,7 @@ export const Hero = () => {
             </div>
 
             {/* Hero Text */}
-            <h1 className="text-3xl sm:text-4xl md:text-5xl font-semibold text-gray-100 text-center leading-tight max-w-4xl mx-auto">
+            <h1 className="text-3xl sm:text-lg md:text-5xl font-semibold text-gray-100 text-center leading-tight max-w-4xl mx-auto">
               <p>Building dreams, fixing bugs, chasing deadlines – when was the last time you shared how you feel?</p>
               <br />
               Talk with{" "}

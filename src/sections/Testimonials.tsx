@@ -47,6 +47,7 @@ export const testimonials = [
 
 export const Testimonials = () => {
   const [testimonialIndex, setTestimonialIndex] = useState(0);
+
   return <section id="testimonials">
     <div className="container">
       <SectionBorder borderTop>

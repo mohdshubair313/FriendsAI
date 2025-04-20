@@ -10,7 +10,7 @@ import Button from "@/components/Button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 export const navItems = [
-  { name: "Features", href: "#features" },
+  { name: "Feature", href: "#features" },
   { name: "Pricing", href: "#pricing" },
   { name: "Feedback", href: "/feedback" },
 ];
@@ -42,7 +42,7 @@ export const Header = () => {
                 <a
                   key={name}
                   href={href}
-                  className="px-4 py-2 text-xs uppercase tracking-widest font-bold text-gray-400 hover:text-white transition hover:scale-105 rounded-full bg-gray-950 hover:bg-gradient-to-r hover:from-amber-300 hover:via-teal-300 hover:to-fuchsia-400 hover:text-transparent hover:bg-clip-text"
+                  className="px-8 py-2 text-xs tracking-widest font-bold text-gray-400 hover:text-white transition hover:scale-105 rounded-full bg-gray-950 hover:bg-gradient-to-r hover:from-amber-300 hover:via-teal-300 hover:to-fuchsia-400 hover:text-transparent hover:bg-clip-text"
                 >
                   {name}
                 </a>
@@ -112,7 +112,7 @@ export const Header = () => {
               <a
                 key={name}
                 href={href}
-                className="text-lg font-semibold tracking-wide text-white hover:text-amber-400 transition"
+                className="text-xl font-semibold tracking-wide text-white hover:text-amber-400 transition"
               >
                 {name}
               </a>

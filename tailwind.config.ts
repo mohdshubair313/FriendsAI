@@ -72,10 +72,18 @@ const config: Config = {
           from: { backgroundPosition: "0 0" },
           to: { backgroundPosition: "-200% 0" },
         },
+        flip: {
+          to: { transform: "rotate(360deg)" },
+        },
+        rotate: {
+          to: { transform: "rotate(90deg)" },
+        },
       },
       animation: {
         "cursor-blink": "cursor-blink 1s step-start infinite",
         shimmer: "shimmer 2s linear infinite",
+        flip: "flip 6s infinite steps(2, end)",
+        rotate: "rotate 3s linear infinite both",
       },
       borderRadius: {
         lg: "var(--radius)",
