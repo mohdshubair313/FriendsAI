@@ -2,7 +2,6 @@
 
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { sessionmethod } from "@/auth";
-
 import { Session as AuthSession } from "@auth/core/types";
 
 // Use AuthSession directly instead of redefining it

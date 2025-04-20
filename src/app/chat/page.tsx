@@ -43,19 +43,6 @@ export default function ChatPage() {
     }
   }, [session, router]);
 
-  // Fetch chat history on page load
-  useEffect(() => {
-    const fetchChatHistory = async () => {
-      try {
-        const response = await axios.get("/api/chat-history");
-        setMessages(response.data);
-      } catch (error) {
-        console.error("Error fetching chat history:", error);
-      }
-    };
-
-    fetchChatHistory();
-  }, []);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -151,7 +138,6 @@ export default function ChatPage() {
               </div>
             </div>
 
-            {/* Chat History */}
             <div className="flex-1 overflow-y-auto p-4">
               {messages.map((message, index) => (
                 <div

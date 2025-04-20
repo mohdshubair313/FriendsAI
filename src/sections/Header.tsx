@@ -58,12 +58,14 @@ export const Header = () => {
                     <AvatarFallback>CN</AvatarFallback>
                   </Avatar>
                   <button
-                    className="relative px-6 py-2 rounded-md bg-black text-white group hover:bg-transparent"
-                    onClick={() => signOut({ callbackUrl: "/" })}
-                  >
-                    <span className="absolute inset-0 bg-gradient-to-r from-amber-300 via-teal-300 to-fuchsia-400 rounded-md -z-10 transition-transform scale-0 group-hover:scale-100"></span>
-                    Sign Out
-                  </button>
+                  onClick={() => signOut({ callbackUrl: "/" })}
+                 className="relative px-6 py-2 rounded-xl overflow-hidden backdrop-blur-md bg-black/50 text-white group border border-white/10 shadow-[0_0_30px_rgba(255,255,255,0.1)]">
+              <span className="absolute inset-0 -z-10 transition-all duration-300 ease-in-out scale-0 group-hover:scale-100 group-hover:blur-md bg-[conic-gradient(at_top_left,_amber,teal,fuchsia,amber)] opacity-70 rounded-xl" />
+              <span className="relative z-10 font-semibold tracking-wide">
+                Sign Out
+              </span>
+            </button>
+
                 </>
               ) : (
                 loginItems.map(({ name, href, buttonVariant }) => (
@@ -76,13 +78,26 @@ export const Header = () => {
 
             {/* Mobile Hamburger */}
             <div className="lg:hidden">
-              <button
+            <button
                 onClick={() => setMobileNavOpen(!isMobileNavOpen)}
-                className="p-2 rounded-md bg-gradient-to-r from-amber-300 via-teal-300 to-fuchsia-400"
-              >
-                <div className="w-6 h-0.5 bg-black mb-1 transition-transform duration-300 transform origin-center" style={{ transform: isMobileNavOpen ? "rotate(45deg) translateY(0.25rem)" : "none" }} />
-                <div className="w-6 h-0.5 bg-black transition-transform duration-300 transform origin-center" style={{ transform: isMobileNavOpen ? "rotate(-45deg) translateY(-0.25rem)" : "none" }} />
+                className="relative z-50 flex items-center justify-center w-12 h-12 rounded-full overflow-hidden backdrop-blur-md bg-black/30 border border-white/10 shadow-[0_0_25px_rgba(255,255,255,0.1)] group" >
+                <span className="absolute inset-0 rounded-full blur-lg bg-gradient-to-br from-fuchsia-400 via-teal-300 to-amber-300 opacity-60 group-hover:opacity-90 transition-all duration-300" />
+
+                {/* Hamburger Bars */}
+                <div className="relative z-10 flex flex-col justify-center items-center gap-1 transition-all duration-300 ease-in-out">
+                  <div
+                    className={`w-6 h-0.5 bg-white transition-transform duration-300 ${
+                      isMobileNavOpen ? "rotate-45 translate-y-1" : ""
+                    }`}
+                  />
+                  <div
+                    className={`w-6 h-0.5 bg-white transition-transform duration-300 ${
+                      isMobileNavOpen ? "-rotate-45 -translate-y-1" : ""
+                    }`}
+                  />
+                </div>
               </button>
+
             </div>
           </div>
         </div>

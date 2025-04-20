@@ -149,84 +149,86 @@ export const Pricing = () => {
   };
 
   return (
-    <section>
-      <div className="container">
-        <SectionBorder borderTop>
-          <SectionContent>
-            <h2 className="text-3xl md:text-4xl lg:text-5xl font-semibold text-center text-gray-200">
-              Flexible plans for every need
-            </h2>
-            <div className="mt-12 flex flex-col lg:flex-row lg:items-start gap-8">
-              {pricingTiers.map((tier) => (
-                <div
-                  className={twMerge(
-                    "border border-[var(--color-border)] rounded-3xl px-6 py-12 max-w-sm mx-auto flex-1",
-                    tier.className
-                  )}
-                  key={tier.title}
-                >
-                  <h3
+    <div className="container px-4 sm:px-6 md:px-8 lg:px-0">
+      <section>
+        <div className="container">
+          <SectionBorder borderTop>
+            <SectionContent>
+              <h2 className="text-3xl md:text-4xl lg:text-5xl font-semibold text-center text-gray-200">
+                Flexible plans for every need
+              </h2>
+              <div className="mt-12 flex flex-col md:grid md:grid-cols-2 xl:flex xl:flex-row lg:items-start gap-8">
+                {pricingTiers.map((tier) => (
+                  <div
                     className={twMerge(
-                      "font-semibold text-4xl",
-                      tier.color === "violet" && "text-violet-400",
-                      tier.color === "amber" && "text-amber-300",
-                      tier.color === "teal" && "text-teal-300"
+                      "border border-[var(--color-border)] rounded-3xl p-6 sm:p-8 md:p-10 max-w-full w-full sm:max-w-[400px] mx-auto flex-1 transition-all",
+                      tier.className
                     )}
+                    key={tier.title}
                   >
-                    {tier.title}
-                  </h3>
-                  <p className="mt-4 text-gray-400">{tier.description}</p>
-                  <div className="mt-8">
-                    {typeof tier.price === "number" && (
-                      <span className="text-2xl font-semibold text-gray-200 align-top">
-                        ₹
-                      </span>
-                    )}
-                    <span className="text-7xl font-semibold text-gray-200">
-                      {tier.price ? tier.price : <> &nbsp; </>}
-                    </span>
-                  </div>
-
-                  <Script src="https://checkout.razorpay.com/v1/checkout.js" />
-
-                  {tier.title === "Premium" ? (
-                    <Button
-                      className="mt-8 inline-flex h-12 animate-shimmer items-center justify-center rounded-md border border-slate-800 bg-[linear-gradient(110deg,#000103,45%,#1e2631,55%,#000103)] bg-[length:200%_100%] px-6 font-medium text-slate-400 transition-colors focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 focus:ring-offset-slate-50 hover:text-gray-200"
-                      variant="ghost"
-                      onClick={handlePayment}
-                      disabled={isProcessing}
+                    <h3
+                      className={twMerge(
+                        "font-semibold text-4xl",
+                        tier.color === "violet" && "text-violet-400",
+                        tier.color === "amber" && "text-amber-300",
+                        tier.color === "teal" && "text-teal-300"
+                      )}
                     >
-                      {isProcessing ? <Loader className="text-violet-400 text-border font-bold" /> : tier.buttonText}
-                    </Button>
-                  ) : (
-                    <Link href={tier.buttonText === 'Contact Us' ? "/feedback" : '/chat'}>
-                      <Button className="mt-8" variant="secondary">
-                        {tier.buttonText}
-                      </Button>
-                    </Link>
-                  )}
+                      {tier.title}
+                    </h3>
+                    <p className="mt-4 text-gray-400">{tier.description}</p>
+                    <div className="mt-8">
+                      {typeof tier.price === "number" && (
+                        <span className="text-2xl font-semibold text-gray-200 align-top">
+                          ₹
+                        </span>
+                      )}
+                      <span className="text-7xl font-semibold text-gray-200">
+                        {tier.price ? tier.price : <> &nbsp; </>}
+                      </span>
+                    </div>
 
-                  <ul className="flex flex-col gap-4 mt-8">
-                    {tier.features.map((feature) => (
-                      <li
-                        key={feature}
-                        className="border-t border-[var(--color-border)] py-4 flex gap-4 flex-shrink-0"
+                    <Script src="https://checkout.razorpay.com/v1/checkout.js" />
+
+                    {tier.title === "Premium" ? (
+                      <Button
+                        className="mt-8 inline-flex h-12 animate-shimmer items-center justify-center rounded-md border border-slate-800 bg-[linear-gradient(110deg,#000103,45%,#1e2631,55%,#000103)] bg-[length:200%_100%] px-6 font-medium text-slate-400 transition-colors focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 focus:ring-offset-slate-50 hover:text-gray-200"
+                        variant="ghost"
+                        onClick={handlePayment}
+                        disabled={isProcessing}
                       >
-                        <FontAwesomeIcon
-                          icon={faCheckCircle}
-                          className="size-6 text-violet-400"
-                        />
-                        <span className="font-medium">{feature}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ))}
-            </div>
-          </SectionContent>
-        </SectionBorder>
-      </div>
-    </section>
+                        {isProcessing ? <Loader className="text-violet-400 text-border font-bold" /> : tier.buttonText}
+                      </Button>
+                    ) : (
+                      <Link href={tier.buttonText === 'Contact Us' ? "/feedback" : '/chat'}>
+                        <Button className="mt-8" variant="secondary">
+                          {tier.buttonText}
+                        </Button>
+                      </Link>
+                    )}
+
+                    <ul className="flex flex-col gap-4 mt-8">
+                      {tier.features.map((feature) => (
+                        <li
+                          key={feature}
+                          className="border-t border-[var(--color-border)] py-4 flex gap-4 flex-shrink-0"
+                        >
+                          <FontAwesomeIcon
+                            icon={faCheckCircle}
+                            className="size-6 text-violet-400"
+                          />
+                          <span className="font-medium">{feature}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            </SectionContent>
+          </SectionBorder>
+        </div>
+      </section>
+    </div>
   );
 };
 

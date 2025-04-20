@@ -2,54 +2,67 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 
 const Popup = () => {
   const [isVisible, setIsVisible] = useState(true);
   if (!isVisible) return null;
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 dark:bg-black/60 backdrop-blur-lg transition-all duration-300">
+    <AnimatePresence>
       <motion.div
-        initial={{ scale: 0.8, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        exit={{ scale: 0.8, opacity: 0 }}
-        className="relative w-[90%] max-w-sm sm:max-w-md md:max-w-lg p-6 sm:p-8 rounded-2xl bg-gradient-to-br from-white/70 to-white/10 dark:from-[#1e1e1e]/70 dark:to-[#1e1e1e]/10 shadow-xl border border-white/10 text-gray-900 dark:text-white backdrop-blur-2xl"
+        key="popup-wrapper"
+        className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-[2px] transition-all duration-300"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
       >
-        {/* Close Button */}
-        <button
-          onClick={() => setIsVisible(false)}
-          className="absolute top-3 right-3 text-xl text-white dark:text-white/70 hover:text-red-400 transition"
+        <motion.div
+          key="popup"
+          initial={{ scale: 0.9, opacity: 0, y: 20 }}
+          animate={{ scale: 1, opacity: 1, y: 0 }}
+          exit={{ scale: 0.8, opacity: 0, y: 30 }}
+          transition={{ duration: 0.5, ease: "easeOut" }}
+          className="relative w-[90%] max-w-md md:max-w-xl rounded-3xl p-8 sm:p-10 border border-white/10 bg-[#1a1a1a]/80 shadow-[0_0_40px_rgba(255,255,255,0.07)] text-white"
         >
-          ✖
-        </button>
+          {/* Background Floating Glow */}
+          <div className="absolute inset-0 -z-10 rounded-3xl bg-[radial-gradient(circle_at_top_left,_rgba(255,0,150,0.2),transparent_70%)]" />
+          <div className="absolute inset-0 -z-10 rounded-3xl bg-[radial-gradient(circle_at_bottom_right,_rgba(0,255,255,0.2),transparent_70%)]" />
 
-        {/* Heading */}
-        <h2 className="text-2xl sm:text-3xl font-bold mb-3 text-center bg-gradient-to-r from-purple-400 to-pink-400 text-transparent bg-clip-text">
-          Welcome to Friends AI
-        </h2>
+          {/* Close Button */}
+          <button
+            onClick={() => setIsVisible(false)}
+            className="absolute top-4 right-4 text-white text-xl hover:scale-110 hover:text-red-500 transition-all"
+            aria-label="Close"
+          >
+            ✖
+          </button>
 
-        {/* Description */}
-        <p className="text-sm sm:text-base text-center mb-6 text-gray-700 dark:text-gray-300">
-          Connect with your virtual friend 🤖! Sign in or sign up to explore personalized chats & mood-matching experiences.
-        </p>
+          {/* Header */}
+          <h2 className="text-3xl md:text-4xl font-extrabold text-center mb-4 bg-gradient-to-r from-fuchsia-400 via-violet-400 to-blue-400 text-transparent bg-clip-text drop-shadow-lg">
+            ✨ Friends AI Awaits You
+          </h2>
 
-        {/* Buttons */}
-        <div className="flex flex-col gap-4 sm:flex-row sm:justify-center sm:gap-6 mt-4">
-          <Link href="/signin">
-            <button className="w-full sm:w-auto px-6 py-2 rounded-full text-white font-medium bg-gradient-to-r from-purple-600 to-indigo-500 hover:from-purple-700 hover:to-indigo-600 shadow-lg transition-all duration-300">
-              Sign In
-            </button>
-          </Link>
+          <p className="text-center text-sm md:text-base text-gray-300 mb-6 leading-relaxed">
+            Step into conversations that understand your vibes. Sign in or sign up to meet your personal AI companion.
+          </p>
 
-          <Link href="/signup">
-            <button className="w-full sm:w-auto px-6 py-2 rounded-full text-white font-medium bg-gradient-to-r from-pink-500 to-red-400 hover:from-pink-600 hover:to-red-500 shadow-lg transition-all duration-300">
-              Sign Up
-            </button>
-          </Link>
-        </div>
+          {/* Buttons */}
+          <div className="flex flex-col sm:flex-row justify-center items-center gap-4 sm:gap-6 mt-6">
+            <Link href="/signin">
+              <button className="w-full sm:w-auto px-6 py-3 rounded-full bg-gradient-to-r from-[#a78bfa] to-[#7dd3fc] text-white font-semibold shadow-lg hover:shadow-[0_0_20px_#a78bfa] hover:scale-105 transition-all">
+                Sign In
+              </button>
+            </Link>
+            <Link href="/signup">
+              <button className="w-full sm:w-auto px-6 py-3 rounded-full bg-gradient-to-r from-[#fb7185] to-[#facc15] text-white font-semibold shadow-lg hover:shadow-[0_0_20px_#fb7185] hover:scale-105 transition-all">
+                Sign Up
+              </button>
+            </Link>
+          </div>
+        </motion.div>
       </motion.div>
-    </div>
+    </AnimatePresence>
   );
 };
 

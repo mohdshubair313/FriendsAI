@@ -21,23 +21,36 @@ import { motion } from "framer-motion";
 const Page = () => {
   const form = useForm({
     defaultValues: {
-      feedback: ""
+      name: "",
+      email: "",
+      message: ""
     }
   });
 
   interface FeedbackData {
-    feedback: string;
+    name: string;
+    email: string;
+    message: string;
   }
 
-  const handleSubmit = (data: FeedbackData): void => {
-    if (!data.feedback.trim()) {
+  const handleSubmit = async (data: FeedbackData): Promise<void> => {
+    if (!data.message.trim()) {
       toast.error("You sent an empty message! Please write something.");
-    } else {
-      toast.success("Your message has been sent to the founder", {
-        description:
-          "Anything else on your mind? Write it again, and we'll catch it! 😊"
+      return;
+    }
+
+    const res = await fetch("/api/send", {
+      method: "POST",
+      body: JSON.stringify(data)
+    });
+
+    if (res.ok) {
+      toast.success("Feedback sent successfully!", {
+        description: "Thank you for your thoughts — we really appreciate it!"
       });
-      console.log("Feedback Submitted:", data.feedback);
+      form.reset();
+    } else {
+      toast.error("Something went wrong while sending feedback.");
     }
   };
 
@@ -54,23 +67,23 @@ const Page = () => {
         transition={{ duration: 0.8, ease: "easeOut" }}
         className="relative z-10 w-full max-w-3xl bg-white/10 border border-white/20 backdrop-blur-2xl shadow-2xl rounded-2xl p-6 sm:p-10 text-white"
       >
-            {/* Desktop animated title */}
-            <div className="hidden sm:block mb-8">
-                <TextRevealCard
-                        className="items-center justify-center ml-7"
-                        text="We need Your Help!"
-                        revealText="We Need Your Feedback"
-                    >
-                        <TextRevealCardTitle className="text-center text-white">
-                        Your Feedback is very Valuable for Us!
-                        </TextRevealCardTitle>
-                </TextRevealCard>
-            </div>
+        {/* Desktop animated title */}
+        <div className="hidden sm:block mb-8">
+          <TextRevealCard
+            className="items-center justify-center ml-7"
+            text="We need Your Help!"
+            revealText="We Need Your Feedback"
+          >
+            <TextRevealCardTitle className="text-center text-white">
+              Your Feedback is very Valuable for Us!
+            </TextRevealCardTitle>
+          </TextRevealCard>
+        </div>
 
-            {/* Mobile fallback title */}
-            <div className="sm:hidden text-center text-white text-lg font-semibold mb-6">
-            Your Feedback is very Valuable for Us!
-            </div>
+        {/* Mobile fallback title */}
+        <div className="sm:hidden text-center text-white text-lg font-semibold mb-6">
+          Your Feedback is very Valuable for Us!
+        </div>
 
         <FormProvider {...form}>
           <form
@@ -78,13 +91,49 @@ const Page = () => {
             onSubmit={form.handleSubmit(handleSubmit)}
           >
             <FormField
-              name="feedback"
+              name="name"
               control={form.control}
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="text-purple-200 text-md font-medium">
-                    Share your thoughts
-                  </FormLabel>
+                  <FormLabel className="text-purple-200">Your Name</FormLabel>
+                  <FormControl>
+                    <Textarea
+                      placeholder="Enter your name"
+                      className="resize-none text-white bg-white/5 border border-white/20 focus:border-purple-400 focus:ring-2 focus:ring-purple-400 placeholder:text-white/60"
+                      rows={1}
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              name="email"
+              control={form.control}
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-purple-200">Your Email</FormLabel>
+                  <FormControl>
+                    <Textarea
+                      placeholder="Enter your email"
+                      className="resize-none text-white bg-white/5 border border-white/20 focus:border-purple-400 focus:ring-2 focus:ring-purple-400 placeholder:text-white/60"
+                      rows={1}
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              name="message"
+              control={form.control}
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-purple-200">Share your thoughts</FormLabel>
                   <FormControl>
                     <Textarea
                       placeholder="Your voice matters! Share your feedback 💬💡"
@@ -100,11 +149,9 @@ const Page = () => {
                 </FormItem>
               )}
             />
+
             <div className="flex justify-center">
-              <motion.div
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-              >
+              <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
                 <Button
                   type="submit"
                   variant="ghost"
