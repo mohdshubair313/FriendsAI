@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import ReactMarkdown from "react-markdown";
 import remarkParse from "remark-parse";
 import remarkRehype from "remark-rehype";
 import rehypeRaw from "rehype-raw";
 import rehypeStringify from "rehype-stringify";
-import { 
+import {
   Select,
   SelectContent,
   SelectGroup,
@@ -32,40 +32,34 @@ export default function ChatPage() {
   >([]);
   const [isChatloading, setisChatloading] = useState(false);
   const [ispageloader, setispageloader] = useState(true);
+  const bottomRef = useRef<HTMLDivElement | null>(null);
 
   const session = useSession();
   const router = useRouter();
 
-  // Redirect to signup if not authenticated
   useEffect(() => {
-    if (!session) {
-      router.push("/signup");
-    }
+    if (!session) router.push("/signup");
   }, [session, router]);
 
-
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setispageloader(false);
-    }, 1000);
+    const timer = setTimeout(() => setispageloader(false), 1000);
     return () => clearTimeout(timer);
   }, []);
 
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
   const sendMessage = async () => {
     if (!newMessage.trim()) return;
-
     setisChatloading(false);
-    setMessages((prev) => [
-      ...prev,
-      { userMessage: newMessage, botResponse: null },
-    ]);
+    setMessages((prev) => [...prev, { userMessage: newMessage, botResponse: null }]);
 
     try {
-      const maxLength = 300;
       const response = await axios.post("/api/generate", {
         mood,
         userMessage: newMessage,
-        maxLength: maxLength,
+        maxLength: 300,
       });
 
       setMessages((prev) =>
@@ -91,105 +85,105 @@ export default function ChatPage() {
     setNewMessage("");
   };
 
-  const setMoodHandler = (value: string) => {
-    setMood(value);
-  };
-
-  // Early return to show loader
-  if (ispageloader) {
-    return <Loader />;
-  }
+  if (ispageloader) return <Loader />;
+  if (!session) return <Popup />;
 
   return (
-    <div>
-      <div>
-        {session ? (
-          <div className="h-screen flex flex-col bg-gray-950 text-white">
-            {/* Header */}
-            <div className="p-4 bg-gray-800 shadow-md">
-              <div className="flex justify-between items-center">
-                <Select onValueChange={setMoodHandler} value={mood}>
-                  <SelectTrigger className="w-[180px]">
-                    <SelectValue placeholder="Select a Mood" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectGroup>
-                      <SelectLabel>Moods</SelectLabel>
-                      <SelectItem value="Motivated">Motivated 😤</SelectItem>
-                      <SelectItem value="Excited">Excited 🤩</SelectItem>
-                      <SelectItem value="Lover">Lover 🥰</SelectItem>
-                      <SelectItem value="Friendly">Friendly 🤗</SelectItem>
-                      <SelectItem value="Supportive">Supportive 🤝</SelectItem>
-                    </SelectGroup>
-                  </SelectContent>
-                </Select>
-                <h2 className="text-2xl relative font-semibold">
-                  Friends AI
-                  <span
-                    className="absolute w-full left-0 top-full h-4 bg-gradient-to-r from-amber-300 via-teal-300 to-fuchsia-400"
-                    style={{
-                      maskImage: `url(${underlineImage.src})`,
-                      maskSize: "contain",
-                      maskPosition: "center",
-                      maskRepeat: "no-repeat",
-                    }}
-                  ></span>
-                </h2>
-              </div>
-            </div>
+    <div className="h-screen flex flex-col bg-gradient-to-b from-gray-900 to-black text-white">
+      <header className="p-4 bg-gradient-to-r from-purple-800 via-fuchsia-600 to-pink-500 shadow-lg z-10">
+        <div className="flex justify-between items-center container mx-auto">
+          <Select onValueChange={(val) => setMood(val)} value={mood}>
+            <SelectTrigger className="w-[180px] bg-black/30 text-white border border-white/20">
+              <SelectValue placeholder="Select a Mood" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                <SelectLabel>Moods</SelectLabel>
+                <SelectItem value="Motivated">Motivated 😤</SelectItem>
+                <SelectItem value="Excited">Excited 🤩</SelectItem>
+                <SelectItem value="Lover">Lover 🥰</SelectItem>
+                <SelectItem value="Friendly">Friendly 🤗</SelectItem>
+                <SelectItem value="Supportive">Supportive 🤝</SelectItem>
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+          <h1 className="text-3xl font-extrabold relative text-white">
+            Friends AI
+            <span
+              className="absolute w-full left-0 top-full h-3 bg-gradient-to-r from-amber-300 via-teal-300 to-fuchsia-400"
+              style={{
+                maskImage: `url(${underlineImage.src})`,
+                maskSize: "contain",
+                maskRepeat: "no-repeat",
+                maskPosition: "center",
+              }}
+            ></span>
+          </h1>
+        </div>
+      </header>
 
-            <div className="flex-1 overflow-y-auto p-4">
-              {messages.map((message, index) => (
-                <div
-                  key={index}
-                  className="mb-6 p-4 border border-gray-700 rounded-lg bg-gray-900"
-                >
-                  {/* User Message */}
-                  <div className="font-bold text-blue-400 mb-1">You:</div>
-                  <div className="text-gray-300">{message.userMessage}</div>
-
-                  {/* Divider */}
-                  <hr className="my-4 border-gray-700" />
-
-                  {/* Bot Response */}
-                  <div className="font-bold text-green-400 mt-2">Friend AI:</div>
-                  {message.botResponse === null ? (
-                    isChatloading && <ChatLoader />
-                  ) : (
-                    <ReactMarkdown
-                      className="prose prose-invert"
-                      remarkPlugins={[remarkParse, remarkRehype]}
-                      rehypePlugins={[rehypeRaw, rehypeStringify]}
-                    >
-                      {message.botResponse}
-                    </ReactMarkdown>
-                  )}
-                </div>
-              ))}
-            </div>
-
-            {/* Input Box */}
-            <div className="p-4 bg-gray-800 flex">
-              <input
-                type="text"
-                value={newMessage}
-                onChange={(e) => setNewMessage(e.target.value)}
-                placeholder="Type your message..."
-                className="flex-1 p-3 rounded bg-gray-700 text-white border border-gray-600 focus:ring focus:ring-purple-500"
-              />
-              <button
-                onClick={sendMessage}
-                className="ml-3 px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded shadow-md flex items-center"
-              >
-                <SendIcon className="w-5 h-5 mr-2" />
-                Send
-              </button>
-            </div>
+      <main className="flex-1 overflow-y-auto px-4 py-6 container mx-auto space-y-6">
+        {messages.length === 0 ? (
+          <div className="text-center text-gray-400 mt-20 animate-fade-in">
+            <p className="text-lg">Start chatting with your AI friend ✨</p>
           </div>
         ) : (
-          <Popup />
+          messages.map((msg, index) => (
+            <div
+              key={index}
+              className={`max-w-xl mx-auto p-5 rounded-2xl shadow-md transition-all duration-300 animate-fade-in backdrop-blur-lg bg-black/30 border border-white/10 ${
+                msg.botResponse ? "space-y-4" : ""
+              }`}
+            >
+              <div className="text-blue-300 font-medium">You:</div>
+              <div className="text-gray-100 text-base">{msg.userMessage}</div>
+
+              {msg.botResponse && (
+                <>
+                  <hr className="border-white/10 my-3" />
+                  <div className="text-green-300 font-medium">Friend AI:</div>
+                  <ReactMarkdown
+                    className="prose prose-invert text-sm"
+                    remarkPlugins={[remarkParse, remarkRehype]}
+                    rehypePlugins={[rehypeRaw, rehypeStringify]}
+                  >
+                    {msg.botResponse}
+                  </ReactMarkdown>
+                </>
+              )}
+
+              {!msg.botResponse && !isChatloading && (
+                <ChatLoader />
+              )}
+            </div>
+          ))
         )}
-      </div>
+        <div ref={bottomRef}></div>
+      </main>
+
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          sendMessage();
+        }}
+        className={`w-full px-6 py-4 bg-black/80 border-t border-white/10 backdrop-blur-md flex items-center gap-4 transition-all duration-300 ${
+          messages.length === 0 ? "justify-center mt-auto" : ""
+        }`}
+      >
+        <input
+          type="text"
+          value={newMessage}
+          onChange={(e) => setNewMessage(e.target.value)}
+          placeholder="Ask me anything..."
+          className="flex-1 p-3 rounded-lg bg-white/10 text-white placeholder:text-gray-400 border border-white/10 focus:outline-none focus:ring-2 focus:ring-fuchsia-500"
+        />
+        <button
+          type="submit"
+          className="flex items-center gap-2 px-5 py-2 rounded-lg bg-gradient-to-r from-purple-600 to-pink-500 hover:from-purple-700 hover:to-pink-600 text-white font-medium shadow-md"
+        >
+          <SendIcon className="w-5 h-5" /> Send
+        </button>
+      </form>
     </div>
   );
 }
