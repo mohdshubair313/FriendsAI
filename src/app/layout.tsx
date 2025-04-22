@@ -1,4 +1,4 @@
-import type { Metadata, Viewport } from "next";
+import type { Metadata } from "next";
 import { Sora, Space_Grotesk } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
@@ -20,11 +20,6 @@ export const metadata: Metadata = {
   description: "Created by Shubair",
 };
 
-// ✅ This should be OUTSIDE metadata
-export const viewport: Viewport = {
-  width: "device-width",
-  initialScale: 1,
-};
 
 export default function RootLayout({
   children,

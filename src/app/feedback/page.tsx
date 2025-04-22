@@ -17,6 +17,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { useForm, FormProvider } from "react-hook-form";
 import { motion } from "framer-motion";
+import {FeedbackData} from "@/lib/types"
 
 const Page = () => {
   const form = useForm({
@@ -26,12 +27,6 @@ const Page = () => {
       message: ""
     }
   });
-
-  interface FeedbackData {
-    name: string;
-    email: string;
-    message: string;
-  }
 
   const handleSubmit = async (data: FeedbackData): Promise<void> => {
     if (!data.message.trim()) {

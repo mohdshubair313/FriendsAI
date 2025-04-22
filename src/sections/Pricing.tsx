@@ -12,6 +12,7 @@ import { faCheckCircle } from "@fortawesome/free-solid-svg-icons";
 import { useRouter } from "next/navigation";
 import Loader from "@/assets/images/loader-animated.svg";
 import Link from "next/link";
+import {RazorpayOptions} from "@/lib/types"
 
 export const pricingTiers = [
   {
@@ -71,62 +72,24 @@ export const pricingTiers = [
   className: string;
 }[];
 
-declare global {
-  interface Window {
-    Razorpay: new (options: RazorpayOptions) => RazorpayInstance;
-  }
-}
-
-interface RazorpayOptions {
-  key: string;
-  amount: number;
-  currency: string;
-  name: string;
-  description: string;
-  order_id: string;
-  handler: (response: RazorpayResponse) => void;
-  prefill: {
-    name: string;
-    email: string;
-    contact: string;
-  };
-  theme: {
-    color: string;
-  };
-}
-
-interface RazorpayResponse {
-  razorpay_payment_id: string;
-  razorpay_order_id: string;
-  razorpay_signature: string;
-}
-
-interface RazorpayInstance {
-  open: () => void;
-}
-
 export const Pricing = () => {
   const AMOUNT = 100;
   const [isProcessing, setIsProcessing] = useState(false);
-  const router = useRouter(); // Use Next.js router for redirection
+  const router = useRouter();
 
   const handlePayment = async () => {
     setIsProcessing(true);
-
     try {
       const response = await fetch("/api/create-order", { method: "POST" });
       const data = await response.json();
-
       const options: RazorpayOptions = {
         key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || "",
-        amount: AMOUNT * 100, // Razorpay expects the amount in paise (₹99.00 * 100)
+        amount: AMOUNT * 100,
         currency: "INR",
         name: "Friends AI",
         description: "Upgrade to Premium",
         order_id: data.orderId,
-        handler: function (response: RazorpayResponse) {
-          console.log("Payment successful", response);
-          // Redirect to premium page
+        handler: function () {
           router.push("/premium");
         },
         prefill: {
@@ -138,7 +101,6 @@ export const Pricing = () => {
           color: "#FF00FF",
         },
       };
-
       const rzp1 = new window.Razorpay(options);
       rzp1.open();
     } catch (error) {
@@ -149,86 +111,87 @@ export const Pricing = () => {
   };
 
   return (
-    <div className="container px-4 sm:px-6 md:px-8 lg:px-0">
-      <section>
-        <div className="container">
-          <SectionBorder borderTop>
-            <SectionContent>
-              <h2 className="text-3xl md:text-4xl lg:text-5xl font-semibold text-center text-gray-200">
-                Flexible plans for every need
-              </h2>
-              <div className="mt-12 flex flex-col md:grid md:grid-cols-2 xl:flex xl:flex-row lg:items-start gap-8">
-                {pricingTiers.map((tier) => (
-                  <div
+    <section>
+      <div className="container">
+        <SectionBorder borderTop>
+          <SectionContent>
+            <h2 className="text-3xl md:text-4xl lg:text-5xl font-semibold text-center text-gray-200">
+              Flexible plans for every need
+            </h2>
+
+            <div className="mt-12 flex flex-col lg:flex-row lg:items-start gap-8 lg:justify-between">
+              {pricingTiers.map((tier) => (
+                <div
+                  key={tier.title}
+                  className={twMerge(
+                    "border border-[var(--color-border)] rounded-3xl px-6 py-12 w-full max-w-[360px] sm:max-w-[420px] mx-auto lg:mx-0 flex-1",
+                    tier.className
+                  )}
+                >
+                  <h3
                     className={twMerge(
-                      "border border-[var(--color-border)] rounded-3xl p-6 sm:p-8 md:p-10 max-w-full w-full sm:max-w-[400px] mx-auto flex-1 transition-all",
-                      tier.className
+                      "font-semibold text-4xl",
+                      tier.color === "violet" && "text-violet-400",
+                      tier.color === "amber" && "text-amber-300",
+                      tier.color === "teal" && "text-teal-300"
                     )}
-                    key={tier.title}
                   >
-                    <h3
-                      className={twMerge(
-                        "font-semibold text-4xl",
-                        tier.color === "violet" && "text-violet-400",
-                        tier.color === "amber" && "text-amber-300",
-                        tier.color === "teal" && "text-teal-300"
-                      )}
-                    >
-                      {tier.title}
-                    </h3>
-                    <p className="mt-4 text-gray-400">{tier.description}</p>
-                    <div className="mt-8">
-                      {typeof tier.price === "number" && (
-                        <span className="text-2xl font-semibold text-gray-200 align-top">
-                          ₹
-                        </span>
-                      )}
-                      <span className="text-7xl font-semibold text-gray-200">
-                        {tier.price ? tier.price : <> &nbsp; </>}
+                    {tier.title}
+                  </h3>
+                  <p className="mt-4 text-gray-400">{tier.description}</p>
+
+                  <div className="mt-8">
+                    {typeof tier.price === "number" && (
+                      <span className="text-2xl font-semibold text-gray-200 align-top">
+                        ₹
                       </span>
-                    </div>
-
-                    <Script src="https://checkout.razorpay.com/v1/checkout.js" />
-
-                    {tier.title === "Premium" ? (
-                      <Button
-                        className="mt-8 inline-flex h-12 animate-shimmer items-center justify-center rounded-md border border-slate-800 bg-[linear-gradient(110deg,#000103,45%,#1e2631,55%,#000103)] bg-[length:200%_100%] px-6 font-medium text-slate-400 transition-colors focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 focus:ring-offset-slate-50 hover:text-gray-200"
-                        variant="ghost"
-                        onClick={handlePayment}
-                        disabled={isProcessing}
-                      >
-                        {isProcessing ? <Loader className="text-violet-400 text-border font-bold" /> : tier.buttonText}
-                      </Button>
-                    ) : (
-                      <Link href={tier.buttonText === 'Contact Us' ? "/feedback" : '/chat'}>
-                        <Button className="mt-8" variant="secondary">
-                          {tier.buttonText}
-                        </Button>
-                      </Link>
                     )}
-
-                    <ul className="flex flex-col gap-4 mt-8">
-                      {tier.features.map((feature) => (
-                        <li
-                          key={feature}
-                          className="border-t border-[var(--color-border)] py-4 flex gap-4 flex-shrink-0"
-                        >
-                          <FontAwesomeIcon
-                            icon={faCheckCircle}
-                            className="size-6 text-violet-400"
-                          />
-                          <span className="font-medium">{feature}</span>
-                        </li>
-                      ))}
-                    </ul>
+                    <span className="text-7xl font-semibold text-gray-200">
+                      {tier.price || <>&nbsp;</>}
+                    </span>
                   </div>
-                ))}
-              </div>
-            </SectionContent>
-          </SectionBorder>
-        </div>
-      </section>
-    </div>
+
+                  <Script src="https://checkout.razorpay.com/v1/checkout.js" />
+
+                  {tier.title === "Premium" ? (
+                    <Button
+                      className="mt-8 inline-flex h-12 animate-shimmer items-center justify-center rounded-md border border-slate-800 bg-[linear-gradient(110deg,#000103,45%,#1e2631,55%,#000103)] bg-[length:200%_100%] px-6 font-medium text-slate-400 transition-colors focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 focus:ring-offset-slate-50 hover:text-gray-200"
+                      variant="ghost"
+                      onClick={handlePayment}
+                      disabled={isProcessing}
+                    >
+                      {isProcessing ? (
+                        <Loader className="text-violet-400 text-border font-bold" />
+                      ) : (
+                        tier.buttonText
+                      )}
+                    </Button>
+                  ) : (
+                    <Link href={tier.buttonText === "Contact Us" ? "/feedback" : "/chat"}>
+                      <Button className="mt-8" variant="secondary">
+                        {tier.buttonText}
+                      </Button>
+                    </Link>
+                  )}
+
+                  <ul className="flex flex-col gap-4 mt-8">
+                    {tier.features.map((feature) => (
+                      <li
+                        key={feature}
+                        className="border-t border-[var(--color-border)] py-4 flex gap-4"
+                      >
+                        <FontAwesomeIcon icon={faCheckCircle} className="size-6 text-violet-400" />
+                        <span className="font-medium">{feature}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          </SectionContent>
+        </SectionBorder>
+      </div>
+    </section>
   );
 };
 
