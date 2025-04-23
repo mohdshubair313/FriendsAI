@@ -39,3 +39,9 @@ export interface FeedbackData {
     }
   }
   
+  export interface Message {
+    id: string;
+    content: string;
+    role: 'user' | 'assistant' | 'system';
+    // createdAt?: Date;
+  }
