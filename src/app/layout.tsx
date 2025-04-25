@@ -3,6 +3,7 @@ import { Sora, Space_Grotesk } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 import { SessionProvider } from "@/context/SessionContext";
+import { Analytics } from '@vercel/analytics/next';
 
 const soraFont = Sora({
   subsets: ["latin"],
@@ -32,6 +33,7 @@ export default function RootLayout({
         className={`${soraFont.variable} ${spaceGroteskFont.variable} antialiased bg-gray-950 text-gray-300 font-body overflow-x-hidden max-w-screen overflow-hidden`}
       >
         <SessionProvider>{children}</SessionProvider>
+        <Analytics />
         <Toaster />
       </body>
     </html>
