@@ -2,15 +2,18 @@
 
 import { FormEvent, useRef, useEffect } from "react";
 import { SendIcon } from "lucide-react";
-import { AnimatePresence,motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import clsx from "clsx";
+import { toast } from "sonner"; // You forgot to import `toast`
+import { IconBrandSoundcloud } from "@tabler/icons-react";
 
 type ChatInputProps = {
   input: string;
   handleInputChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
   handleSubmit: (e: FormEvent<HTMLFormElement>) => void;
   disabled?: boolean;
-  isLoading?:boolean
+  isLoading?: boolean;
+  isPremium?: boolean;
 };
 
 export default function ChatInput({
@@ -19,10 +22,10 @@ export default function ChatInput({
   handleSubmit,
   disabled = false,
   isLoading = false,
+  isPremium = false,
 }: ChatInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Auto-grow textarea
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
@@ -60,48 +63,73 @@ export default function ChatInput({
         transition={{ duration: 0.3 }}
       />
 
-      {/* SEND BUTTON */}
+      {/* Action Button */}
       <AnimatePresence mode="wait">
-  {!isLoading ? (
-    <motion.button
-      key="send"
-      type="submit"
-      disabled={disabled || !input.trim()}
-      className={clsx(
-        "p-3 rounded-xl bg-gradient-to-br from-purple-600 to-fuchsia-500",
-        "hover:from-purple-500 hover:to-fuchsia-400",
-        "disabled:opacity-40 disabled:cursor-not-allowed",
-        "text-white shadow-lg transition-all duration-300",
-        "relative overflow-hidden group"
-      )}
-      initial={{ opacity: 0, scale: 0.8 }}
-      animate={{ opacity: 1, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.8 }}
-      whileTap={{ scale: 0.9 }}
-      whileHover={{ scale: 1.08 }}
-    >
-      <motion.span
-        className="absolute inset-0 bg-white/20 rounded-full blur-xl opacity-0 group-hover:opacity-100 transition duration-300"
-        animate={{ scale: [1, 1.5, 1], opacity: [0.3, 0.6, 0.3] }}
-        transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
-      />
-      <SendIcon className="relative z-10 w-5 h-5" />
-    </motion.button>
-  ) : (
-    <motion.div
-      key="loader"
-      initial={{ opacity: 0, scale: 0.8 }}
-      animate={{ opacity: 1, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.8 }}
-      transition={{ duration: 0.3 }}
-      className="px-4 py-2 rounded-xl bg-gradient-to-r from-pink-500 via-purple-500 to-indigo-500 text-sm font-bold text-white animate-shimmer bg-[length:200%_auto] bg-clip-text text-transparent"
-    >
-      <span className="animate-pulse bg-clip-text text-transparent bg-gradient-to-r from-purple-300 via-white to-pink-300">
-        Thinking...
-      </span>
-    </motion.div>
-  )}
-</AnimatePresence>
+        {!isLoading ? (
+          <motion.button
+            key="send"
+            type="submit"
+            disabled={disabled || !input.trim()}
+            className={clsx(
+              "p-3 rounded-xl bg-gradient-to-br from-purple-600 to-fuchsia-500",
+              "hover:from-purple-500 hover:to-fuchsia-400",
+              "disabled:opacity-40 disabled:cursor-not-allowed",
+              "text-white shadow-lg transition-all duration-300",
+              "relative overflow-hidden group"
+            )}
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.8 }}
+            whileTap={{ scale: 0.9 }}
+            whileHover={{ scale: 1.08 }}
+          >
+            <motion.span
+              className="absolute inset-0 bg-white/20 rounded-full blur-xl opacity-0 group-hover:opacity-100 transition duration-300"
+              animate={{ scale: [1, 1.5, 1], opacity: [0.3, 0.6, 0.3] }}
+              transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
+            />
+            <SendIcon className="relative z-10 w-5 h-5" />
+          </motion.button>
+        ) : isPremium ? (
+          <motion.button
+            key="voice"
+            type="button"
+            title="Voice chat (Premium only)"
+            className={clsx(
+              "p-3 rounded-xl bg-gradient-to-br from-orange-500 to-pink-500",
+              "hover:from-orange-400 hover:to-pink-400",
+              "text-white shadow-lg transition-all duration-300",
+              "relative overflow-hidden group"
+            )}
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.8 }}
+            whileTap={{ scale: 0.9 }}
+            whileHover={{ scale: 1.08 }}
+            onClick={() => toast("🎤 Voice AI coming soon...")}
+          >
+            <motion.span
+              className="absolute inset-0 bg-white/20 rounded-full blur-xl opacity-0 group-hover:opacity-100 transition duration-300"
+              animate={{ scale: [1, 1.5, 1], opacity: [0.3, 0.6, 0.3] }}
+              transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
+            />
+            <IconBrandSoundcloud className="relative z-10 w-5 h-5" />
+          </motion.button>
+        ) : (
+          <motion.div
+            key="loader"
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.8 }}
+            transition={{ duration: 0.3 }}
+            className="px-4 py-2 rounded-xl bg-gradient-to-r from-pink-500 via-purple-500 to-indigo-500 text-sm font-bold text-white animate-shimmer bg-[length:200%_auto] bg-clip-text text-transparent"
+          >
+            <span className="animate-pulse bg-clip-text text-transparent bg-gradient-to-r from-purple-300 via-white to-pink-300">
+              Thinking...
+            </span>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </form>
   );
 }

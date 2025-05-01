@@ -1,3 +1,4 @@
+import {heroui} from '@heroui/theme';
 import type { Config } from "tailwindcss";
 import flattenColorPalette from "tailwindcss/lib/util/flattenColorPalette";
 import tailwindcssAnimate from "tailwindcss-animate";
@@ -26,6 +27,7 @@ const config: Config = {
     "./src/app/**/*.{js,ts,jsx,tsx,mdx}",
     "./src/components/**/*.{js,ts,jsx,tsx,mdx}",
     "./src/sections/**/*.{js,ts,jsx,tsx,mdx}",
+    "./node_modules/@heroui/theme/dist/components/avatar.js"
   ],
   theme: {
     screens: {
@@ -134,11 +136,7 @@ const config: Config = {
       },
     },
   },
-  plugins: [
-    addVariablesForColors,
-    tailwindcssAnimate,
-    tailwindTypography,
-  ],
+  plugins: [addVariablesForColors,tailwindcssAnimate,tailwindTypography,heroui()],
 };
 
 export default config;

@@ -30,16 +30,6 @@ export async function POST(req: NextRequest) {
       const parts = result.text
       console.log(parts)
 
-      // for (const part of parts) {
-      //   if (part.inlineData?.data && part.inlineData.mimeType?.startsWith("image/")) {
-      //     return NextResponse.json({
-      //       role: "data",
-      //       type: "image",
-      //       base64: part.inlineData.data,
-      //     });
-      //   }
-      // }
-
       return NextResponse.json({ error: "Image generation failed" }, { status: 500 });
     }
 

@@ -14,7 +14,6 @@ body {
   touch-action: manipulation; /* disables double-tap zoom */
 }
 
-
 @layer base {
   :root {
     --color-violent-400: theme("colors.violet.400");
@@ -60,6 +59,9 @@ body {
 
   .absolute-center {
     @apply absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 isolate -z-10;
+  }
+  .theme {
+    --animate-background-position-spin: background-position-spin 3000ms infinite alternate;
   }
 }
 
@@ -118,4 +120,21 @@ body {
   scrollbar-width: none;
 }
 
-
+@theme inline {
+  @keyframes background-position-spin {
+  0% {
+    background-position: top center;
+    }
+  100% {
+    background-position: bottom center;
+    }
+  }
+  @keyframes background-position-spin {
+  0% {
+    background-position: top center;
+    }
+  100% {
+    background-position: bottom center;
+    }
+  }
+}

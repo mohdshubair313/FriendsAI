@@ -9,11 +9,31 @@ import ChatNavbar from '@/components/chatComponents/ChatNavbar';
 import ChatInput from '@/components/chatComponents/ChatInput';
 import MessageBubble from '@/components/chatComponents/MessageBubble';
 import { SparklesText } from '@/components/magicui/sparkles-text'; 
+import { toast } from "sonner";
 import { MoodChips } from '@/components/chatComponents/MoodChips';
 
 export default function ChatPage() {
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const [mood, setMood] = useState('happy');
+  const [isPremium, setIsPremium] = useState(false);
+
+useEffect(() => {
+  const checkPremiumStatus = async () => {
+    try {
+      const res = await fetch('/api/check-subscription');
+      const data = await res.json();
+      if (data.isPremium) {
+        setIsPremium(true);
+        toast.success('🎉 You have successfully purchased the premium section. Voice AI is now enabled!');
+      }
+    } catch (err) {
+      console.error('Failed to check subscription:', err);
+    }
+  };
+
+  checkPremiumStatus();
+}, []);
+
 
   const {
     messages,
@@ -106,6 +126,7 @@ export default function ChatPage() {
             handleInputChange={handleInputChange}
             handleSubmit={handleSubmit}
             isLoading={isLoading}
+            isPremium={isPremium}
           />
         </div>
       </div>
