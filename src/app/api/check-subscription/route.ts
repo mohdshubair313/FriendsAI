@@ -12,7 +12,7 @@ export async function GET() {
 
   await connectToDb();
   const user = await User.findOne({
-    email: user.email,
+    email: session.user.email,
   });
 
   return NextResponse.json({ isPremium: user?.isPremium || false });

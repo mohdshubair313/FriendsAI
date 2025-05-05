@@ -21,7 +21,7 @@ export default function ClientHomepage() {
     useEffect(() => {
         const timer = setTimeout(() => {
             setIsLoading(false);
-        }, 10);
+        }, 100);
         return () => clearTimeout(timer);
     }, []);
 
