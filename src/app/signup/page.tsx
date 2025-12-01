@@ -1,4 +1,4 @@
-import { signIn } from "@/auth";
+// import { signup } from "@/auth";
 import { connectToDb } from "@/lib/db";
 import { faGithub } from "@fortawesome/free-brands-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -6,7 +6,7 @@ import { hash } from "bcryptjs";
 import Link from "next/link";
 import Image from "next/image";
 import { redirect } from "next/navigation";
-import { User } from "../models/userModel";
+import { User } from "@/models/userModel";
 import Google from "@/assets/images/image.png";
 
 const page = () => {
@@ -78,19 +78,19 @@ const page = () => {
 
         {/* Social Sign Ups */}
         <div className="mt-6 flex flex-col gap-4">
-          <form action={async () => { "use server"; await signIn("google"); }}>
+          {/* <form action={async () => { "use server"; await signIn("google"); }}>
           <button className="w-full flex items-center justify-center gap-2 bg-white/20 backdrop-blur-md text-white border border-white/30 rounded-lg py-2 hover:bg-white/30 transition">
             <Image src={Google} alt="Google" width={30} height={30} />
             Continue with Google
           </button>
-          </form>
+          </form> */}
 
-          <form action={async () => { "use server"; await signIn("github"); }}>
+          {/* <form action={async () => { "use server"; await signIn("github"); }}>
             <button className="w-full flex items-center justify-center gap-2 bg-white/20 backdrop-blur-md text-white border border-white/30 rounded-lg py-2 hover:bg-white/30 transition">
               <FontAwesomeIcon icon={faGithub} width={30} height={30} className="text-gray text-xl" />
               Continue with GitHub
             </button>
-          </form>
+          </form> */}
         </div>
       </div>
     </div>

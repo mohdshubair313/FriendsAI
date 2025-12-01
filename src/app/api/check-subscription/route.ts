@@ -1,8 +1,8 @@
 // /app/api/check-subscription/route.ts
 import { NextResponse } from "next/server";
-import { useSession } from "@/context/SessionContext"; 
-import { User } from "@/app/models/userModel";
-import { connectToDb } from "@/lib/db"; 
+import { useSession } from "@/context/SessionContext";
+import { User } from "@/models/userModel";
+import { connectToDb } from "@/lib/db";
 
 export async function GET() {
   const session = useSession(); // Removed unnecessary await

@@ -1,14 +1,15 @@
 'use client'
 
-import AcmeCorpLogo from "../assets/images/acme-corp-logo.svg";
-import EchoValleyLogo from "../assets/images/echo-valley-logo.svg";
-import QuantumLogo from "../assets/images/quantum-logo.svg";
-import PulseLogo from "../assets/images/pulse-logo.svg";
-import OutsideLogo from "../assets/images/outside-logo.svg";
-import CelestialLogo from "../assets/images/celestial-logo.svg";
+import AcmeCorpLogo from "@/assets/images/acme-corp-logo.svg";
+import EchoValleyLogo from "@/assets/images/echo-valley-logo.svg";
+import QuantumLogo from "@/assets/images/quantum-logo.svg";
+import PulseLogo from "@/assets/images/pulse-logo.svg";
+import OutsideLogo from "@/assets/images/outside-logo.svg";
+import CelestialLogo from "@/assets/images/celestial-logo.svg";
 import SectionBorder from "@/components/SectionBorder";
 import SectionContent from "@/components/SectionContent";
 import { motion } from "framer-motion";
+import Image from "next/image";
 
 export const companies = [
   { name: "Acme Corp", logo: AcmeCorpLogo },
@@ -41,9 +42,13 @@ export const Companies = () => {
                   ease: "linear",
                 }}
               >
-                {[...companies, ...companies].map(({ logo: Logo }, index) => (
+                {[...companies, ...companies].map(({ logo, name }, index) => (
                   <div key={index} className="flex-shrink-0">
-                    <Logo className="h-6 sm:h-8 md:h-10 opacity-80 hover:opacity-100 transition" />
+                    <Image
+                      src={logo}
+                      alt={name}
+                      className="opacity-80 hover:opacity-100 transition h-6 sm:h-8 md:h-10 w-auto"
+                    />
                   </div>
                 ))}
               </motion.div>

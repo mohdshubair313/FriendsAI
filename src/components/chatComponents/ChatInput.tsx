@@ -1,11 +1,12 @@
 "use client";
 
-import { FormEvent, useRef, useEffect } from "react";
-import { SendIcon } from "lucide-react";
+import { FormEvent, useRef, useEffect, useState } from "react";
+import { SendIcon, Paperclip, Mic, ArrowUp, Square } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import clsx from "clsx";
-import { toast } from "sonner"; // You forgot to import `toast`
-import { IconBrandSoundcloud } from "@tabler/icons-react";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 type ChatInputProps = {
   input: string;
@@ -14,6 +15,7 @@ type ChatInputProps = {
   disabled?: boolean;
   isLoading?: boolean;
   isPremium?: boolean;
+  onVoiceClick?: () => void;
 };
 
 export default function ChatInput({
@@ -23,113 +25,131 @@ export default function ChatInput({
   disabled = false,
   isLoading = false,
   isPremium = false,
+  onVoiceClick,
 }: ChatInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [isFocused, setIsFocused] = useState(false);
 
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
-      textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 200)}px`;
     }
   }, [input]);
 
-  return (
-    <form
-      onSubmit={handleSubmit}
-      className={clsx(
-        "w-full px-4 md:px-10 py-6 bg-black/30 backdrop-blur-xl",
-        "border-t border-white/10",
-        "flex justify-center items-end gap-4",
-        "transition-all duration-300"
-      )}
-    >
-      <motion.textarea
-        ref={textareaRef}
-        value={input}
-        onChange={handleInputChange}
-        placeholder="Send your magic..."
-        rows={1}
-        disabled={disabled}
-        className={clsx(
-          "w-full resize-none max-h-40 p-4 rounded-xl bg-white/5",
-          "text-white placeholder-white/40 font-medium text-base",
-          "focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2",
-          "transition-all duration-300 ease-in-out shadow-lg",
-          "border border-white/10 backdrop-blur-md",
-          "scrollbar-hide"
-        )}
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
-      />
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      if (input.trim() && !disabled && !isLoading) {
+        handleSubmit(e as any);
+      }
+    }
+  };
 
-      {/* Action Button */}
-      <AnimatePresence mode="wait">
-        {!isLoading ? (
-          <motion.button
-            key="send"
-            type="submit"
-            disabled={disabled || !input.trim()}
-            className={clsx(
-              "p-3 rounded-xl bg-gradient-to-br from-purple-600 to-fuchsia-500",
-              "hover:from-purple-500 hover:to-fuchsia-400",
-              "disabled:opacity-40 disabled:cursor-not-allowed",
-              "text-white shadow-lg transition-all duration-300",
-              "relative overflow-hidden group"
-            )}
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.8 }}
-            whileTap={{ scale: 0.9 }}
-            whileHover={{ scale: 1.08 }}
-          >
-            <motion.span
-              className="absolute inset-0 bg-white/20 rounded-full blur-xl opacity-0 group-hover:opacity-100 transition duration-300"
-              animate={{ scale: [1, 1.5, 1], opacity: [0.3, 0.6, 0.3] }}
-              transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
-            />
-            <SendIcon className="relative z-10 w-5 h-5" />
-          </motion.button>
-        ) : isPremium ? (
-          <motion.button
-            key="voice"
-            type="button"
-            title="Voice chat (Premium only)"
-            className={clsx(
-              "p-3 rounded-xl bg-gradient-to-br from-orange-500 to-pink-500",
-              "hover:from-orange-400 hover:to-pink-400",
-              "text-white shadow-lg transition-all duration-300",
-              "relative overflow-hidden group"
-            )}
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.8 }}
-            whileTap={{ scale: 0.9 }}
-            whileHover={{ scale: 1.08 }}
-            onClick={() => toast("🎤 Voice AI coming soon...")}
-          >
-            <motion.span
-              className="absolute inset-0 bg-white/20 rounded-full blur-xl opacity-0 group-hover:opacity-100 transition duration-300"
-              animate={{ scale: [1, 1.5, 1], opacity: [0.3, 0.6, 0.3] }}
-              transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
-            />
-            <IconBrandSoundcloud className="relative z-10 w-5 h-5" />
-          </motion.button>
-        ) : (
-          <motion.div
-            key="loader"
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.8 }}
-            transition={{ duration: 0.3 }}
-            className="px-4 py-2 rounded-xl bg-gradient-to-r from-pink-500 via-purple-500 to-indigo-500 text-sm font-bold text-white animate-shimmer bg-[length:200%_auto] bg-clip-text text-transparent"
-          >
-            <span className="animate-pulse bg-clip-text text-transparent bg-gradient-to-r from-purple-300 via-white to-pink-300">
-              Thinking...
-            </span>
-          </motion.div>
+  return (
+    <div className="w-full max-w-4xl mx-auto px-4 pb-6">
+      <motion.div
+        initial={{ y: 20, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ duration: 0.4, ease: "easeOut" }}
+        className={clsx(
+          "relative flex flex-col w-full p-3 rounded-3xl transition-all duration-300",
+          "bg-white/5 dark:bg-black/40 backdrop-blur-xl",
+          "border border-white/10 shadow-2xl",
+          isFocused ? "ring-2 ring-primary/20 border-primary/30" : "hover:border-white/20"
         )}
-      </AnimatePresence>
-    </form>
+      >
+        <form
+          onSubmit={handleSubmit}
+          className="flex items-end gap-2"
+        >
+          {/* Attachment Button (Placeholder) */}
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="text-muted-foreground hover:text-foreground hover:bg-white/10 rounded-full h-10 w-10 shrink-0 mb-0.5"
+                  onClick={() => toast.info("Attachments coming soon!")}
+                >
+                  <Paperclip className="w-5 h-5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Attach file</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+
+          <textarea
+            ref={textareaRef}
+            value={input}
+            onChange={handleInputChange}
+            onKeyDown={handleKeyDown}
+            onFocus={() => setIsFocused(true)}
+            onBlur={() => setIsFocused(false)}
+            placeholder="Send a message..."
+            rows={1}
+            disabled={disabled}
+            className={clsx(
+              "flex-1 max-h-[200px] py-3 px-2 bg-transparent",
+              "text-foreground placeholder:text-muted-foreground/50 text-base",
+              "focus:outline-none resize-none scrollbar-hide",
+              "min-h-[44px]"
+            )}
+          />
+
+          <div className="flex items-center gap-2 mb-0.5 shrink-0">
+            {/* Voice Mode Button */}
+            {isPremium && !isLoading && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={onVoiceClick}
+                      className="text-muted-foreground hover:text-foreground hover:bg-white/10 rounded-full h-10 w-10"
+                    >
+                      <Mic className="w-5 h-5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Voice Mode</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+
+            {/* Send / Stop Button */}
+            <Button
+              type="submit"
+              disabled={disabled || (!input.trim() && !isLoading)}
+              size="icon"
+              className={clsx(
+                "h-10 w-10 rounded-full transition-all duration-300 shadow-lg",
+                isLoading
+                  ? "bg-red-500/10 text-red-500 hover:bg-red-500/20 border border-red-500/20"
+                  : input.trim()
+                    ? "bg-foreground text-background hover:opacity-90"
+                    : "bg-muted text-muted-foreground"
+              )}
+            >
+              {isLoading ? (
+                <Square className="w-4 h-4 fill-current" />
+              ) : (
+                <ArrowUp className="w-5 h-5" />
+              )}
+            </Button>
+          </div>
+        </form>
+      </motion.div>
+
+      {/* Footer Hint */}
+      <div className="text-center mt-3">
+        <p className="text-xs text-muted-foreground/60">
+          Nova Chat can make mistakes. Check important info.
+        </p>
+      </div>
+    </div>
   );
 }

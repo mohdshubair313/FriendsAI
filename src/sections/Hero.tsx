@@ -69,14 +69,14 @@ export const Hero = () => {
             <div className="absolute -z-10 inset-0 bg-[radial-gradient(circle_farthest-corner,var(--color-fuchsia-900)_50%,var(--color-indigo-900)_75%,transparent)] [mask-image:radial-gradient(circle_farthest-side,black,transparent)]" />
             <div className="absolute inset-0 -z-10 pointer-events-none">
               {[350, 600, 850, 1100, 1350].map((size, idx) => (
-                <div key={idx} className="absolute-center">
-                  <Orbit className={`size-[${size}px]`} />
+                <div key={idx} className={`absolute-center ${idx > 2 ? "hidden md:block" : ""}`}>
+                  <Orbit className={`size-[${size * 0.6}px] md:size-[${size}px]`} />
                 </div>
               ))}
             </div>
 
             {/* Hero Text */}
-            <h1 className="text-3xl sm:text-lg md:text-5xl font-semibold text-gray-100 text-center leading-tight max-w-4xl mx-auto">
+            <h1 className="text-4xl sm:text-5xl md:text-6xl font-semibold text-gray-100 text-center leading-tight max-w-4xl mx-auto">
               <p>Building dreams, fixing bugs, chasing deadlines – when was the last time you shared how you feel?</p>
               <br />
               Talk with{" "}
@@ -110,13 +110,13 @@ export const Hero = () => {
             <div className="relative isolate max-w-5xl mx-auto mt-16">
               <div className="absolute left-1/2 top-0">
                 <motion.div style={{ x: largeX, y: largeY }}>
-                  <Planet size="lg" color="violet" className="-translate-x-[304px] -translate-y-[76px] rotate-135" />
+                  <Planet size="lg" color="violet" className="-translate-x-[100px] -translate-y-[40px] md:-translate-x-[304px] md:-translate-y-[76px] rotate-135" />
                 </motion.div>
                 <motion.div style={{ x: largeX, y: largeY }}>
-                  <Planet size="sm" color="fuchsia" className="-translate-y-[200px] translate-x-[220px] -rotate-135" />
+                  <Planet size="sm" color="fuchsia" className="-translate-y-[100px] translate-x-[80px] md:-translate-y-[200px] md:translate-x-[220px] -rotate-135" />
                 </motion.div>
                 <motion.div style={{ x: midX, y: midY }}>
-                  <Planet size="md" color="teal" className="-translate-y-[480px] -translate-x-[480px]" />
+                  <Planet size="md" color="teal" className="-translate-y-[200px] -translate-x-[150px] md:-translate-y-[480px] md:-translate-x-[480px]" />
                 </motion.div>
               </div>
 
@@ -133,7 +133,7 @@ export const Hero = () => {
               <div className="mt-20 rounded-2xl border-2 overflow-hidden border-gradient relative max-w-full">
                 <Image src={FaceImage} alt="Robot Image" className="w-full h-auto object-cover" />
                 <div className="bg-gray-950/80 flex items-center gap-4 px-4 py-2 rounded-2xl max-w-full">
-                  <Loader className="text-violet-400" />
+                  <Image src={Loader} alt="Loading animation" width={24} height={24} />
                   <div className="font-semibold text-xl text-gray-100">
                     AI is generating <span className="animate-cursor-blink">|</span>
                   </div>

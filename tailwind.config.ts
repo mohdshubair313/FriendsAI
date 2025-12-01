@@ -1,32 +1,17 @@
-import {heroui} from '@heroui/theme';
 import type { Config } from "tailwindcss";
-import flattenColorPalette from "tailwindcss/lib/util/flattenColorPalette";
 import tailwindcssAnimate from "tailwindcss-animate";
 import tailwindTypography from "@tailwindcss/typography";
-
-function addVariablesForColors({
-  addBase,
-  theme,
-}: {
-  addBase: (base: Record<string, Record<string, string>>) => void;
-  theme: (path: string) => Record<string, string | number>;
-}) {
-  const allColors = flattenColorPalette(theme("colors"));
-  const newVars: Record<string, string> = Object.fromEntries(
-    Object.entries(allColors).map(([key, val]) => [`--${key}`, String(val)])
-  );
-
-  addBase({
-    ":root": newVars,
-  });
-}
+// Assuming 'heroui' is correctly installed and exporting its theme function
+import { heroui } from '@heroui/theme';
 
 const config: Config = {
+  // Ensure Next.js components and utility files are correctly scanned
   darkMode: ["class"],
   content: [
     "./src/app/**/*.{js,ts,jsx,tsx,mdx}",
     "./src/components/**/*.{js,ts,jsx,tsx,mdx}",
     "./src/sections/**/*.{js,ts,jsx,tsx,mdx}",
+    // Keep this line for 'heroui' components
     "./node_modules/@heroui/theme/dist/components/avatar.js"
   ],
   theme: {
@@ -46,6 +31,7 @@ const config: Config = {
           lg: "2rem",
         },
       },
+      // ... (Your custom extensions remain unchanged)
       gap: {
         18: "4.5rem",
       },
@@ -93,6 +79,7 @@ const config: Config = {
         sm: "calc(var(--radius) - 4px)",
       },
       colors: {
+        // These colors now directly reference the CSS variables defined in globals.css
         background: "hsl(var(--background))",
         foreground: "hsl(var(--foreground))",
         card: {
@@ -136,7 +123,8 @@ const config: Config = {
       },
     },
   },
-  plugins: [addVariablesForColors,tailwindcssAnimate,tailwindTypography,heroui()],
+  // We keep your necessary plugins
+  plugins: [tailwindcssAnimate, tailwindTypography, heroui()],
 };
 
 export default config;

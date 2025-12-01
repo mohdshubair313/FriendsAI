@@ -2,21 +2,18 @@
 
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { sessionmethod } from "@/auth";
-import { Session as AuthSession } from "@auth/core/types";
+import { Session } from "next-auth";
 
-// Use AuthSession directly instead of redefining it
-const SessionContext = createContext<AuthSession | null>(null);
+const SessionContext = createContext<Session | null>(null);
 
 export const SessionProvider = ({ children }: { children: React.ReactNode }) => {
-  const [session, setSession] = useState<AuthSession | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
 
   useEffect(() => {
-    // Fetch session on component mount
     const fetchSession = async () => {
       try {
-        const sessionData: AuthSession | null = await sessionmethod();
+        const sessionData = await sessionmethod();
         setSession(sessionData);
-        console.log(sessionData);
       } catch (error) {
         console.error("Error fetching session:", error);
       }
@@ -32,6 +29,6 @@ export const SessionProvider = ({ children }: { children: React.ReactNode }) => 
   );
 };
 
-export const useSession = (): AuthSession | null => {
+export const useSession = () => {
   return useContext(SessionContext);
 };

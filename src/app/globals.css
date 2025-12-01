@@ -1,140 +1,95 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-@import url("https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap");
-
-* {
-  box-sizing: border-box;
-}
-
-html,
-body {
-  /* max-width: 120vw; */
-  overflow-x: hidden;
-  touch-action: manipulation; /* disables double-tap zoom */
-}
 
 @layer base {
+
+  /* These CSS variables (custom properties) are the correct way to define 
+    your theme colors, which are referenced by 'hsl(var(--color))' in 
+    your tailwind.config.js file.
+
+    This replaces the JavaScript logic that was causing the 'Parsing CSS source code failed' error.
+  */
   :root {
-    --color-violent-400: theme("colors.violet.400");
-    --color-fuchsia-400: theme("colors.fuchsia.400");
-    --color-fuchsia-900: theme("colors.fuchsia.900");
-    --color-amber-400: theme("colors.amber.400");
-    --color-teal-400: theme("colors.teal.400");
-    --color-gray-950: theme("colors.gray.900");
-    --color-indigo-900: theme("colors.indigo.900");
-    --color-border: theme("colors.gray.200/20");
+    /* Base configuration for light mode (Standard HSL values) */
     --background: 0 0% 100%;
     --foreground: 222.2 84% 4.9%;
+
     --card: 0 0% 100%;
     --card-foreground: 222.2 84% 4.9%;
+
     --popover: 0 0% 100%;
     --popover-foreground: 222.2 84% 4.9%;
+
     --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
+    --primary-foreground: 210 20% 98%;
+
+    --secondary: 210 20% 98%;
     --secondary-foreground: 222.2 47.4% 11.2%;
+
     --muted: 210 40% 96.1%;
     --muted-foreground: 215.4 16.3% 46.9%;
+
     --accent: 210 40% 96.1%;
     --accent-foreground: 222.2 47.4% 11.2%;
+
     --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive-foreground: 210 20% 98%;
+
     --border: 214.3 31.8% 91.4%;
     --input: 214.3 31.8% 91.4%;
     --ring: 222.2 84% 4.9%;
-    --chart-1: 12 76% 61%;
-    --chart-2: 173 58% 39%;
-    --chart-3: 197 37% 24%;
-    --chart-4: 43 74% 66%;
-    --chart-5: 27 87% 67%;
+
     --radius: 0.5rem;
+
+    /* Chart Colors (placeholders based on your config) */
+    --chart-1: 172 100% 33%;
+    --chart-2: 28 90% 55%;
+    --chart-3: 200 80% 60%;
+    --chart-4: 100 50% 40%;
+    --chart-5: 330 70% 50%;
   }
 
-  .border-gradient {
-    @apply border-2 border-transparent bg-gradient-to-r from-amber-300 via-teal-300 to-fuchsia-400 rounded-lg relative;
-    background-clip: padding-box; /*Ensures only the border has the gradient*/
-    box-shadow: inset 0 0 0 2px black; /*Adds a solid background inside the border */
-  }
+  /* Dark mode variable definitions */
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 20% 98%;
 
-  .absolute-center {
-    @apply absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 isolate -z-10;
-  }
-  .theme {
-    --animate-background-position-spin: background-position-spin 3000ms infinite alternate;
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 20% 98%;
+
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 20% 98%;
+
+    --primary: 217.2 91.2% 59.8%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+
+    --secondary: 217.2 32.4% 18.2%;
+    --secondary-foreground: 210 20% 98%;
+
+    --muted: 217.2 32.4% 18.2%;
+    --muted-foreground: 215 20.2% 65.1%;
+
+    --accent: 217.2 32.4% 18.2%;
+    --accent-foreground: 210 20% 98%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 20% 98%;
+
+    --border: 217.2 32.4% 18.2%;
+    --input: 217.2 32.4% 18.2%;
+    --ring: 217.2 91.2% 59.8%;
   }
 }
 
-@layer base {
-  * {
-    @apply border-border;
-  }
-  body {
-    @apply bg-background text-foreground;
-  }
+/* Base style reset */
+* {
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
 }
 
-.markdown ul li {
-  margin-bottom: 10px; /* Space between unordered list items */
-}
-
-.markdown ol li {
-  margin-bottom: 10px; /* Space between ordered list items */
-}
-
-.markdown hr {
-  margin: 20px 0; /* Space before and after horizontal line */
-  border: 1px solid #ddd; /* For better visibility of separator */
-}
-
-@layer utilities {
-  .ring-glow {
-    box-shadow: 0 0 20px rgba(100, 200, 255, 0.3), 0 0 40px rgba(100, 200, 255, 0.2);
-  }
-  animate-shimmer {
-    background-size: 200% auto;
-    background-image: linear-gradient(
-      110deg,
-      rgba(255, 255, 255, 0.05) 0%,
-      rgba(255, 255, 255, 0.2) 20%,
-      rgba(255, 255, 255, 0.05) 40%
-    );
-    animation: shimmer 2s linear infinite;
-  }
-}
-
-@keyframes shimmer {
-  0% {
-    background-position: -200% center;
-  }
-  100% {
-    background-position: 200% center;
-  }
-}
-
-.scrollbar-hide::-webkit-scrollbar {
-  display: none;
-}
-.scrollbar-hide {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-}
-
-@theme inline {
-  @keyframes background-position-spin {
-  0% {
-    background-position: top center;
-    }
-  100% {
-    background-position: bottom center;
-    }
-  }
-  @keyframes background-position-spin {
-  0% {
-    background-position: top center;
-    }
-  100% {
-    background-position: bottom center;
-    }
-  }
+html {
+  line-height: 1.5;
+  -webkit-text-size-adjust: 100%;
 }

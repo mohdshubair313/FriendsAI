@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
     const isImagePrompt = /(generate|make|create|draw|paint)( an| a)? (image|picture|art|illustration|photo)/i.test(userMessage);
 
     if (isImagePrompt) {
-      const model = google("gemini-2.0-flash-exp");
+      const model = google("gemini-3-pro-image-preview");
       const result = await generateText({
         model,
         prompt: userMessage,
@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 🧠 Text response with mood
-    const textModel = google("gemini-2.0-flash-exp");
+    const textModel = google("gemini-3-pro-preview");
 
     const moodContextMap: Record<string, string> = {
       happy: "Respond in a cheerful and uplifting tone.",
