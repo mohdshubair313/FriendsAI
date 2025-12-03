@@ -1,12 +1,16 @@
 "use client";
 
 import React, { createContext, useContext, useEffect, useState } from "react";
-import { sessionmethod } from "@/auth";
+import { sessionmethod } from "@/lib/auth";
 import { Session } from "next-auth";
 
 const SessionContext = createContext<Session | null>(null);
 
-export const SessionProvider = ({ children }: { children: React.ReactNode }) => {
+export const SessionProvider = ({
+  children,
+}: {
+  children: React.ReactNode;
+}) => {
   const [session, setSession] = useState<Session | null>(null);
 
   useEffect(() => {

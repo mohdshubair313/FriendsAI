@@ -1,85 +1,101 @@
-'use client';
+"use client";
 
-import { useChat } from '@ai-sdk/react';
-import { useEffect, useRef, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import Image from 'next/image';
+import { useChat } from "@ai-sdk/react";
+import { useEffect, useRef, useState, useCallback } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import Image from "next/image";
 import { toast } from "sonner";
+import { useSession } from "next-auth/react";
 
-import ChatNavbar from '@/components/chatComponents/ChatNavbar';
-import ChatInput from '@/components/chatComponents/ChatInput';
-import MessageBubble from '@/components/chatComponents/MessageBubble';
-import EmptyState from '@/components/chatComponents/EmptyState';
-import VoiceMode from '@/components/chatComponents/VoiceMode';
-import { useSession } from '@/context/SessionContext';
+import ChatNavbar from "@/components/chatComponents/ChatNavbar";
+import ChatInput from "@/components/chatComponents/ChatInput";
+import MessageBubble from "@/components/chatComponents/MessageBubble";
+import EmptyState from "@/components/chatComponents/EmptyState";
+import VoiceMode from "@/components/chatComponents/VoiceMode";
 
 export default function ChatPage() {
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const [isPremium, setIsPremium] = useState(false);
   const [isVoiceModeOpen, setIsVoiceModeOpen] = useState(false);
-  const session = useSession();
+  const { data: session, status } = useSession();
   const [anonymousCount, setAnonymousCount] = useState(0);
 
   useEffect(() => {
-    if (!session) {
-      const count = localStorage.getItem('anonymousMessageCount');
+    if (status === "unauthenticated") {
+      const count = localStorage.getItem("anonymousMessageCount");
       setAnonymousCount(count ? parseInt(count) : 0);
     }
-  }, [session]);
+  }, [status]);
 
   useEffect(() => {
     const checkPremiumStatus = async () => {
       try {
-        const res = await fetch('/api/check-subscription');
+        const res = await fetch("/api/check-subscription");
         const data = await res.json();
         if (data.isPremium) {
           setIsPremium(true);
-          toast.success('🎉 Premium features enabled!');
+          toast.success("🎉 Premium features enabled!");
         }
       } catch (err) {
-        console.error('Failed to check subscription:', err);
+        console.error("Failed to check subscription:", err);
       }
     };
 
     checkPremiumStatus();
   }, []);
 
-  const {
-    messages,
-    input,
-    handleInputChange,
-    handleSubmit: baseHandleSubmit,
-    isLoading,
-    append,
-    setInput
-  } = useChat({
-    api: '/api/generate',
-    body: { mood: 'friendly' } // Default mood
+  const { messages } = useChat({
+    api: "/api/generate",
+    body: {
+      mood: "friendly",
+      userId: session?.user?.id,
+    },
+    onError: (error) => {
+      console.error("Chat error:", error);
+      toast.error("Failed to get response. Please try again.");
+    },
+    onFinish: (message) => {
+      console.log("Message finished:", message);
+    },
   });
 
-  const checkAnonymousLimit = () => {
-    if (!session) {
+  const checkAnonymousLimit = useCallback(() => {
+    if (status === "unauthenticated") {
       if (anonymousCount >= 2) {
         toast.error("Login required to continue chatting!");
         return false;
       }
       const newCount = anonymousCount + 1;
       setAnonymousCount(newCount);
-      localStorage.setItem('anonymousMessageCount', newCount.toString());
+      localStorage.setItem("anonymousMessageCount", newCount.toString());
     }
     return true;
-  };
+  }, [anonymousCount, status]);
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (!checkAnonymousLimit()) return;
-    baseHandleSubmit(e);
-  };
+  const handleSubmit = useCallback(
+    (e: React.FormEvent<HTMLFormElement>) => {
+      e.preventDefault();
+      if (!checkAnonymousLimit()) return;
+      if (!input.trim()) {
+        toast.error("Please enter a message");
+        return;
+      }
+      baseHandleSubmit(e);
+    },
+    [checkAnonymousLimit, input, baseHandleSubmit],
+  );
 
-  const handleVoiceMessage = (message: string) => {
-    if (!checkAnonymousLimit()) return;
-    append({ role: 'user', content: message });
-  };
+  const handleVoiceMessage = useCallback(
+    (message: string) => {
+      if (!checkAnonymousLimit()) return;
+      if (!message.trim()) {
+        toast.error("No message detected. Please try again.");
+        return;
+      }
+      append({ role: "user", content: message });
+    },
+    [checkAnonymousLimit, append],
+  );
 
   const handleSuggestionClick = (prompt: string) => {
     setInput(prompt);
@@ -87,7 +103,7 @@ export default function ChatPage() {
   };
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
   return (
@@ -108,7 +124,7 @@ export default function ChatPage() {
             <div className="space-y-6 pb-4">
               <AnimatePresence initial={false}>
                 {messages.map((m, i) => {
-                  if (m.role === 'data' && 'type' in m && m.type === 'image') {
+                  if (m.role === "data" && "type" in m && m.type === "image") {
                     return (
                       <motion.div
                         key={m.id || `image-${i}`}
@@ -117,7 +133,7 @@ export default function ChatPage() {
                         className="flex justify-start mb-6"
                       >
                         <div className="rounded-2xl overflow-hidden shadow-lg border border-white/10 bg-white/5 p-2 max-w-sm">
-                          {'base64' in m ? (
+                          {"base64" in m ? (
                             <Image
                               src={m.base64 as string}
                               alt="Generated AI"
@@ -127,19 +143,23 @@ export default function ChatPage() {
                               unoptimized
                             />
                           ) : (
-                            <p className="text-center text-muted-foreground p-4">Image generation failed</p>
+                            <p className="text-center text-muted-foreground p-4">
+                              Image generation failed
+                            </p>
                           )}
-                          <p className="text-xs text-muted-foreground text-center mt-2">Generated by Nova 🔮</p>
+                          <p className="text-xs text-muted-foreground text-center mt-2">
+                            Generated by Nova 🔮
+                          </p>
                         </div>
                       </motion.div>
                     );
                   }
 
-                  if (['user', 'assistant', 'system'].includes(m.role)) {
+                  if (["user", "assistant", "system"].includes(m.role)) {
                     return (
                       <MessageBubble
                         key={m.id}
-                        role={m.role as 'user' | 'assistant' | 'system'}
+                        role={m.role as "user" | "assistant" | "system"}
                         content={m.content}
                       />
                     );
@@ -182,7 +202,11 @@ export default function ChatPage() {
         onClose={() => setIsVoiceModeOpen(false)}
         onSendMessage={handleVoiceMessage}
         isProcessing={isLoading}
-        lastMessage={messages[messages.length - 1]?.role === 'assistant' ? messages[messages.length - 1].content : undefined}
+        lastMessage={
+          messages[messages.length - 1]?.role === "assistant"
+            ? messages[messages.length - 1].content
+            : undefined
+        }
       />
     </div>
   );

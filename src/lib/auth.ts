@@ -5,89 +5,91 @@ import GoogleProvider from "next-auth/providers/google";
 import { compare } from "bcryptjs";
 import { User } from "@/models/userModel";
 import { connectToDb } from "@/lib/db";
-import { getSession } from "next-auth/react";
 
 export const authOptions: NextAuthOptions = {
   providers: [
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID as string,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
+      allowDangerousEmailAccountLinking: true,
     }),
     GithubProvider({
       clientId: process.env.GITHUB_CLIENT_ID as string,
       clientSecret: process.env.GITHUB_CLIENT_SECRET as string,
+      allowDangerousEmailAccountLinking: true,
     }),
     CredentialsProvider({
       name: "Credentials",
       credentials: {
-        email: { label: "email", type: "email" },
-        password: { label: "password", type: "password" },
+        email: { label: "Email", type: "email", placeholder: "your-email@example.com" },
+        password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
         try {
           if (!credentials?.email || !credentials?.password) {
-            throw new Error("Please fill Email and Password fields");
+            throw new Error("Please provide both email and password");
           }
 
           await connectToDb();
-
           const user = await User.findOne({ email: credentials.email }).select("+password");
 
           if (!user) {
-            throw new Error("Invalid Email and password");
+            throw new Error("No user found with that email");
           }
 
           if (!user.password) {
-            throw new Error("Password not set");
+            throw new Error("Password not set for this account");
           }
 
-          const isMatch = await compare(credentials.password, user.password);
+          const isPasswordValid = await compare(credentials.password, user.password);
 
-          if (!isMatch) {
-            throw new Error("Invalid Password");
+          if (!isPasswordValid) {
+            throw new Error("Invalid password");
           }
 
           return {
             id: user._id.toString(),
             name: user.username,
             email: user.email,
-            username: user.username,
+            image: user.image || undefined,
           };
-        } catch (error: any) {
-          console.error("Error in CredentialsProvider", error);
-          throw new Error(error.message || "Authentication failed");
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "Authentication failed";
+          console.error("[Credentials] Authorization error:", message);
+          throw new Error(message);
         }
       },
     }),
   ],
-  pages: {
-    signIn: "/",
-  },
   callbacks: {
-    async jwt({ token, user }) {
+    async signIn() {
+      // Allow OAuth and credential sign-ins
+      return true;
+    },
+    async jwt({ token, user, account }) {
       if (user) {
         token.id = user.id;
-        token.username = (user as any).username;
+      }
+      if (account) {
+        token.provider = account.provider;
       }
       return token;
     },
     async session({ session, token }) {
       if (session.user) {
-        (session.user as any).id = token.id;
-        (session.user as any).username = token.username;
+        session.user.id = token.id as string;
       }
       return session;
     },
+    async redirect({ url, baseUrl }) {
+      // Allows relative callback URLs
+      if (url.startsWith("/")) return `${baseUrl}${url}`;
+      // Allows callback URLs on the same origin
+      else if (new URL(url).origin === baseUrl) return url;
+      return baseUrl;
+    },
   },
-  secret: process.env.NEXTAUTH_SECRET,
-};
-
-export const sessionmethod = async () => {
-  try {
-    const session = await getSession();
-    return session;
-  } catch (error) {
-    console.error("Error fetching session:", error);
-    return null;
-  }
+  session:{
+    strategy: "jwt"
+  },
 };

@@ -1,11 +1,11 @@
 "use server";
 
 import { CredentialsSignin } from "next-auth";
-import { signIn } from "@/auth";
+import { signIn } from "@/lib/auth";
 
-const credentialsLogin = async (email: string, password: string) => {  
+const credentialsLogin = async (email: string, password: string) => {
     if (!email || !password) {
-      throw new Error("Please fill all the fields");
+        throw new Error("Please fill all the fields");
     }
 
     try {
