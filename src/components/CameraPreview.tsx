@@ -5,7 +5,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { NeonGradientCard } from "@/components/magicui/neon-gradient-card";
 import Button from "@/components/Button"
 import { Video, VideoOff } from "lucide-react";
-import { GeminiWebSocket } from '@/app/services/geminiWebSockets';
+import { GeminiWebSocket } from '@/services/geminiWebSockets';
 import { Base64 } from 'js-base64';
 
 interface CameraPreviewProps {
@@ -65,7 +65,7 @@ export default function CameraPreview({ onTranscription }: CameraPreviewProps) {
       setStream(null);
     } else {
       try {
-        const videoStream = await navigator.mediaDevices.getUserMedia({ 
+        const videoStream = await navigator.mediaDevices.getUserMedia({
           video: true,
           audio: false
         });
@@ -158,8 +158,8 @@ export default function CameraPreview({ onTranscription }: CameraPreviewProps) {
 
   // Update audio processing setup
   useEffect(() => {
-    if (!isStreaming || !stream || !audioContextRef.current || 
-        !isWebSocketReady || isAudioSetup || setupInProgressRef.current) return;
+    if (!isStreaming || !stream || !audioContextRef.current ||
+      !isWebSocketReady || isAudioSetup || setupInProgressRef.current) return;
 
     let isActive = true;
     setupInProgressRef.current = true;
@@ -270,29 +270,29 @@ export default function CameraPreview({ onTranscription }: CameraPreviewProps) {
           playsInline
           className="w-[640px] h-[480px] bg-muted rounded-lg overflow-hidden"
         />
-        
+
         {/* Connection Status Overlay */}
         {isStreaming && connectionStatus !== 'connected' && (
-        <NeonGradientCard>
-          <div className="absolute inset-0 bg-black/50 flex items-center justify-center rounded-lg backdrop-blur-sm">
-            <div className="text-center space-y-2">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto" />
-              <p className="text-white font-medium">
-                {connectionStatus === 'connecting' ? 'Connecting to Gemini...' : 'Disconnected'}
-              </p>
-              <p className="text-white/70 text-sm">
-                Please wait while we establish a secure connection
-              </p>
+          <NeonGradientCard>
+            <div className="absolute inset-0 bg-black/50 flex items-center justify-center rounded-lg backdrop-blur-sm">
+              <div className="text-center space-y-2">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto" />
+                <p className="text-white font-medium">
+                  {connectionStatus === 'connecting' ? 'Connecting to Gemini...' : 'Disconnected'}
+                </p>
+                <p className="text-white/70 text-sm">
+                  Please wait while we establish a secure connection
+                </p>
+              </div>
             </div>
-          </div>
           </ NeonGradientCard>
         )}
 
         <Button
           onClick={toggleCamera}
           className={`absolute left-1/2 bottom-4 -translate-x-1/2 rounded-full w-12 h-12 backdrop-blur-sm transition-colors
-            ${isStreaming 
-              ? 'bg-red-500/50 hover:bg-red-500/70 text-white' 
+            ${isStreaming
+              ? 'bg-red-500/50 hover:bg-red-500/70 text-white'
               : 'bg-green-500/50 hover:bg-green-500/70 text-white'
             }`}
         >
@@ -303,7 +303,7 @@ export default function CameraPreview({ onTranscription }: CameraPreviewProps) {
         <div className="w-[640px] h-2 rounded-full bg-green-100">
           <div
             className="h-full rounded-full transition-all bg-green-500"
-            style={{ 
+            style={{
               width: `${isModelSpeaking ? outputAudioLevel : audioLevel}%`,
               transition: 'width 100ms ease-out'
             }}

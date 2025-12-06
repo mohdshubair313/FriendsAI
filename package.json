@@ -9,7 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "@ai-sdk/google": "^1.2.12",
+    "@ai-sdk/google": "^1.2.22",
     "@ai-sdk/react": "^2.0.106",
     "@fortawesome/fontawesome-svg-core": "^6.6.0",
     "@fortawesome/free-brands-svg-icons": "^6.6.0",
@@ -27,7 +27,7 @@
     "@tailwindcss/postcss": "^4.1.17",
     "@tailwindcss/typography": "^0.5.16",
     "@vercel/analytics": "^1.5.0",
-    "ai": "^4.3.19",
+    "ai": "^6.0.0-beta.136",
     "bcryptjs": "^2.4.3",
     "canvas-confetti": "^1.9.4",
     "class-variance-authority": "^0.7.1",

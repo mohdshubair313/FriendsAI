@@ -17,18 +17,18 @@ export async function POST(req: NextRequest) {
     const isImagePrompt = /(generate|make|create|draw|paint)( an| a)? (image|picture|art|illustration|photo)/i.test(userMessage);
 
     if (isImagePrompt) {
-      const model = google("gemini-3-pro-image-preview");
-      const result = await generateText({
-        model,
+      const { text, sources } = await generateText({
+        model: google("gemini-3-pro-image-preview"),
         prompt: userMessage,
         providerOptions: {
           google: { responseModalities: ["TEXT", "IMAGE"] },
         },
       });
 
-      // const parts = result.content?.parts || [];
-      const parts = result.text
-      console.log(parts)
+      // // const parts = result.content?.parts || [];
+      // const parts = result.text
+      // console.log(parts)
+      console.log(text)
 
       return NextResponse.json({ error: "Image generation failed" }, { status: 500 });
     }

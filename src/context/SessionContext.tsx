@@ -1,38 +1,14 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState } from "react";
-import { sessionmethod } from "@/lib/auth";
-import { Session } from "next-auth";
+import { SessionProvider as NextAuthSessionProvider } from "next-auth/react";
+import { FC, ReactNode } from "react";
 
-const SessionContext = createContext<Session | null>(null);
+interface SessionProviderProps {
+  children: ReactNode;
+}
 
-export const SessionProvider = ({
-  children,
-}: {
-  children: React.ReactNode;
-}) => {
-  const [session, setSession] = useState<Session | null>(null);
-
-  useEffect(() => {
-    const fetchSession = async () => {
-      try {
-        const sessionData = await sessionmethod();
-        setSession(sessionData);
-      } catch (error) {
-        console.error("Error fetching session:", error);
-      }
-    };
-
-    fetchSession();
-  }, []);
-
-  return (
-    <SessionContext.Provider value={session}>
-      {children}
-    </SessionContext.Provider>
-  );
+export const SessionProvider: FC<SessionProviderProps> = ({ children }) => {
+  return <NextAuthSessionProvider>{children}</NextAuthSessionProvider>;
 };
 
-export const useSession = () => {
-  return useContext(SessionContext);
-};
+export { useSession, signIn, signOut } from "next-auth/react";

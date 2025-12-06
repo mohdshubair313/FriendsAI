@@ -1,6 +1,8 @@
 // app/page.tsx
 "use client";
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
+import { useSession } from '@/context/SessionContext';
+import { useRouter } from 'next/navigation';
 import CameraPreview from '@/components/CameraPreview';
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
@@ -42,10 +44,20 @@ const GeminiMessage = ({ text }: { text: string }) => (
 
 export default function Home() {
   const [messages, setMessages] = useState<{ type: 'human' | 'gemini', text: string }[]>([]);
+  const { data: session, status } = useSession();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (status === "unauthenticated") {
+      router.push("/signin");
+    }
+  }, [status, router]);
 
   const handleTranscription = useCallback((transcription: string) => {
     setMessages(prev => [...prev, { type: 'gemini', text: transcription }]);
   }, []);
+
+  if (status === "loading") return <div className='flex h-screen items-center justify-center text-white'>Loading...</div>;
 
   return (
     <>

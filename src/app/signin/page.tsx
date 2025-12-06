@@ -1,15 +1,12 @@
-import { auth, signIn } from "@/lib/auth";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { FC } from "react";
-import { faGithub } from "@fortawesome/free-brands-svg-icons";
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import Image from "next/image";
-import Google from "@/assets/images/image.png";
 import SignInForm from "@/components/client/form";
+import SocialLogin from "@/components/client/SocialLogin";
+import { getAuthSession } from "@/lib/auth";
 
 const SignInPage: FC = async () => {
-  const session = await auth();
+  const session = await getAuthSession();
   if (session?.user) redirect("/");
 
   return (
@@ -35,31 +32,7 @@ const SignInPage: FC = async () => {
         </div>
 
         {/* Social Logins */}
-        <div className="mt-6 flex flex-col gap-4">
-          <form
-            action={async () => {
-              "use server";
-              await signIn("google", { redirectTo: "/" });
-            }}
-          >
-            <button className="w-full flex items-center justify-center gap-2 bg-white/20 backdrop-blur-md text-white border border-white/30 rounded-lg py-2 hover:bg-white/30 transition-all duration-300 hover:scale-[1.02]">
-              <Image src={Google} alt="Google" width={26} height={26} />
-              <span className="text-sm">Continue with Google</span>
-            </button>
-          </form>
-
-          <form
-            action={async () => {
-              "use server";
-              await signIn("github", { redirectTo: "/" });
-            }}
-          >
-            <button className="w-full flex items-center justify-center gap-2 bg-white/20 backdrop-blur-md text-white border border-white/30 rounded-lg py-2 hover:bg-white/30 transition-all duration-300 hover:scale-[1.02]">
-              <FontAwesomeIcon icon={faGithub} width={26} height={26} />
-              <span className="text-sm">Continue with GitHub</span>
-            </button>
-          </form>
-        </div>
+        <SocialLogin />
       </div>
     </div>
   );

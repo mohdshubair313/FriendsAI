@@ -1,11 +1,11 @@
 // /app/api/check-subscription/route.ts
 import { NextResponse } from "next/server";
-import { useSession } from "@/context/SessionContext";
+import { getAuthSession } from "@/lib/auth";
 import { User } from "@/models/userModel";
 import { connectToDb } from "@/lib/db";
 
 export async function GET() {
-  const session = useSession(); // Removed unnecessary await
+  const session = await getAuthSession();
   if (!session?.user?.email) {
     return NextResponse.json({ isPremium: false });
   }

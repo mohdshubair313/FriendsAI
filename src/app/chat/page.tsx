@@ -13,6 +13,7 @@ import MessageBubble from "@/components/chatComponents/MessageBubble";
 import EmptyState from "@/components/chatComponents/EmptyState";
 import VoiceMode from "@/components/chatComponents/VoiceMode";
 
+
 export default function ChatPage() {
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const [isPremium, setIsPremium] = useState(false);
@@ -44,7 +45,7 @@ export default function ChatPage() {
     checkPremiumStatus();
   }, []);
 
-  const { messages } = useChat({
+  const { messages, input, handleInputChange, handleSubmit: baseHandleSubmit, isLoading, append, setInput } = useChat({
     api: "/api/generate",
     body: {
       mood: "friendly",
