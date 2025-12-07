@@ -1,11 +1,12 @@
 "use client";
 
-import { useChat } from "@ai-sdk/react";
+import { useChat } from '@ai-sdk/react';
 import { useEffect, useRef, useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
 import { toast } from "sonner";
 import { useSession } from "next-auth/react";
+import { DefaultChatTransport } from 'ai';
 
 import ChatNavbar from "@/components/chatComponents/ChatNavbar";
 import ChatInput from "@/components/chatComponents/ChatInput";
@@ -13,20 +14,19 @@ import MessageBubble from "@/components/chatComponents/MessageBubble";
 import EmptyState from "@/components/chatComponents/EmptyState";
 import VoiceMode from "@/components/chatComponents/VoiceMode";
 
-
 export default function ChatPage() {
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const [isPremium, setIsPremium] = useState(false);
   const [isVoiceModeOpen, setIsVoiceModeOpen] = useState(false);
-  const { data: session, status } = useSession();
+  const { data: session, status: Sessionstatus } = useSession();
   const [anonymousCount, setAnonymousCount] = useState(0);
 
   useEffect(() => {
-    if (status === "unauthenticated") {
+    if (Sessionstatus === "unauthenticated") {
       const count = localStorage.getItem("anonymousMessageCount");
       setAnonymousCount(count ? parseInt(count) : 0);
     }
-  }, [status]);
+  }, [Sessionstatus]);
 
   useEffect(() => {
     const checkPremiumStatus = async () => {
@@ -45,12 +45,19 @@ export default function ChatPage() {
     checkPremiumStatus();
   }, []);
 
-  const { messages, input, handleInputChange, handleSubmit: baseHandleSubmit, isLoading, append, setInput } = useChat({
-    api: "/api/generate",
-    body: {
-      mood: "friendly",
-      userId: session?.user?.id,
-    },
+  const {
+    messages,
+    status,
+    sendMessage,
+    error,
+  } = useChat({
+    transport: new DefaultChatTransport({
+      api: '/api/generate',
+      body: {
+        mood: "friendly",
+        userId: session?.user?.id,
+      },
+    }),
     onError: (error) => {
       console.error("Chat error:", error);
       toast.error("Failed to get response. Please try again.");
@@ -60,8 +67,16 @@ export default function ChatPage() {
     },
   });
 
+  const isLoading = status === 'submitted' || status === 'streaming';
+
+  const [input, setInput] = useState("");
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    setInput(e.target.value);
+  };
+
   const checkAnonymousLimit = useCallback(() => {
-    if (status === "unauthenticated") {
+    if (Sessionstatus === "unauthenticated") {
       if (anonymousCount >= 2) {
         toast.error("Login required to continue chatting!");
         return false;
@@ -71,7 +86,7 @@ export default function ChatPage() {
       localStorage.setItem("anonymousMessageCount", newCount.toString());
     }
     return true;
-  }, [anonymousCount, status]);
+  }, [anonymousCount, Sessionstatus]);
 
   const handleSubmit = useCallback(
     (e: React.FormEvent<HTMLFormElement>) => {
@@ -81,9 +96,10 @@ export default function ChatPage() {
         toast.error("Please enter a message");
         return;
       }
-      baseHandleSubmit(e);
+      sendMessage({ text: input });
+      setInput("");
     },
-    [checkAnonymousLimit, input, baseHandleSubmit],
+    [checkAnonymousLimit, input, sendMessage],
   );
 
   const handleVoiceMessage = useCallback(
@@ -93,14 +109,13 @@ export default function ChatPage() {
         toast.error("No message detected. Please try again.");
         return;
       }
-      append({ role: "user", content: message });
+      sendMessage({ text: message });
     },
-    [checkAnonymousLimit, append],
+    [checkAnonymousLimit, sendMessage],
   );
 
   const handleSuggestionClick = (prompt: string) => {
     setInput(prompt);
-    // Optional: Auto-submit or just fill input
   };
 
   useEffect(() => {
@@ -125,7 +140,9 @@ export default function ChatPage() {
             <div className="space-y-6 pb-4">
               <AnimatePresence initial={false}>
                 {messages.map((m, i) => {
-                  if (m.role === "data" && "type" in m && m.type === "image") {
+                  const message = m as any;
+                  // Handle image messages (if you have custom logic for images)
+                  if (message.role === "data" && message.type === "image") {
                     return (
                       <motion.div
                         key={m.id || `image-${i}`}
@@ -134,9 +151,9 @@ export default function ChatPage() {
                         className="flex justify-start mb-6"
                       >
                         <div className="rounded-2xl overflow-hidden shadow-lg border border-white/10 bg-white/5 p-2 max-w-sm">
-                          {"base64" in m ? (
+                          {message.base64 ? (
                             <Image
-                              src={m.base64 as string}
+                              src={message.base64 as string}
                               alt="Generated AI"
                               width={512}
                               height={512}
@@ -156,12 +173,18 @@ export default function ChatPage() {
                     );
                   }
 
+                  // Handle regular text messages
                   if (["user", "assistant", "system"].includes(m.role)) {
+                    // Extract text content from parts
+                    const textContent = m.parts
+                      .filter((p: any) => p.type === 'text')
+                      .map((p: any) => p.text)
+                      .join(' ');
                     return (
                       <MessageBubble
                         key={m.id}
                         role={m.role as "user" | "assistant" | "system"}
-                        content={m.content}
+                        content={textContent}
                       />
                     );
                   }
@@ -205,7 +228,10 @@ export default function ChatPage() {
         isProcessing={isLoading}
         lastMessage={
           messages[messages.length - 1]?.role === "assistant"
-            ? messages[messages.length - 1].content
+            ? messages[messages.length - 1].parts
+              .filter((p: any) => p.type === 'text')
+              .map((p: any) => p.text)
+              .join(' ')
             : undefined
         }
       />
