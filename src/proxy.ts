@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 
-export default function proxy() {
+// This is the required export for Next.js proxy/middleware
+export default function proxy(request: NextRequest) {
   return NextResponse.next();
 }
 
-// Ensure middleware is Node.js runtime compatible
 export const config = {
-  runtime: "nodejs",
+  matcher: ["/((?!api|_next/static|_next/image|favicon.ico|public).*)"],
 };

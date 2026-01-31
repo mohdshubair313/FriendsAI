@@ -30,7 +30,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${soraFont.variable} ${spaceGroteskFont.variable} antialiased bg-gray-950 text-gray-300 font-body overflow-x-hidden max-w-screen overflow-hidden`}
+        className={`${soraFont.variable} ${spaceGroteskFont.variable} antialiased bg-gray-950 text-gray-300 font-body overflow-x-hidden`}
       >
         <SessionProvider>{children}</SessionProvider>
         <Analytics />

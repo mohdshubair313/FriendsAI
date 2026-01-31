@@ -1,8 +1,24 @@
 import { convertToModelMessages, UIMessage, streamText, generateText } from "ai";
 import { google } from "@ai-sdk/google";
 import { NextRequest, NextResponse } from "next/server";
+import { APICallError } from "ai";
 
 export const runtime = "edge";
+
+// Helper function to check if error is a quota exceeded error
+function isQuotaExceededError(error: unknown): boolean {
+  if (error instanceof APICallError) {
+    return error.statusCode === 429 ||
+           error.message?.includes("quota") === true ||
+           error.message?.includes("RESOURCE_EXHAUSTED") === true;
+  }
+  if (error instanceof Error) {
+    return error.message.includes("quota") ||
+           error.message.includes("RESOURCE_EXHAUSTED") ||
+           error.message.includes("429");
+  }
+  return false;
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -60,6 +76,28 @@ export async function POST(req: NextRequest) {
     return result.toTextStreamResponse();
   } catch (error) {
     console.error("❌ Chat API Error:", error);
-    return NextResponse.json({ error: "Something went wrong" }, { status: 500 });
+    
+    // Handle quota exceeded errors specifically
+    if (isQuotaExceededError(error)) {
+      return NextResponse.json({ 
+        error: "API quota exceeded. Please try again later or upgrade your plan.",
+        code: "QUOTA_EXCEEDED",
+        details: "The AI service is currently unavailable due to quota limits. Please wait a few minutes and try again."
+      }, { status: 429 });
+    }
+    
+    // Handle other API errors
+    if (error instanceof APICallError) {
+      return NextResponse.json({ 
+        error: "AI service error. Please try again.",
+        code: "AI_SERVICE_ERROR",
+        details: error.message
+      }, { status: error.statusCode || 500 });
+    }
+    
+    return NextResponse.json({ 
+      error: "Something went wrong. Please try again.",
+      code: "INTERNAL_ERROR"
+    }, { status: 500 });
   }
 }

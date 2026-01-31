@@ -62,8 +62,40 @@ export const authOptions: NextAuthOptions = {
     }),
   ],
   callbacks: {
-    async signIn() {
-      // Allow OAuth and credential sign-ins
+    async signIn({ user, account, profile }) {
+      // Handle OAuth user creation/update
+      if (account && (account.provider === "google" || account.provider === "github")) {
+        try {
+          await connectToDb();
+          
+          const existingUser = await User.findOne({ email: user.email });
+          
+          if (!existingUser) {
+            // Create new user for OAuth
+            await User.create({
+              username: user.name || profile?.name || user.email?.split('@')[0],
+              email: user.email,
+              image: user.image,
+              ...(account.provider === "google" ? { googleId: account.providerAccountId } : {}),
+              ...(account.provider === "github" ? { githubId: account.providerAccountId } : {}),
+            });
+          } else {
+            // Update existing user with OAuth ID if not present
+            const updateData: any = {};
+            if (account.provider === "google" && !existingUser.googleId) {
+              updateData.googleId = account.providerAccountId;
+            }
+            if (account.provider === "github" && !existingUser.githubId) {
+              updateData.githubId = account.providerAccountId;
+            }
+            if (Object.keys(updateData).length > 0) {
+              await User.updateOne({ email: user.email }, { $set: updateData });
+            }
+          }
+        } catch (error) {
+          console.error("Error handling OAuth sign in:", error);
+        }
+      }
       return true;
     },
     async jwt({ token, user, account }) {
@@ -90,8 +122,14 @@ export const authOptions: NextAuthOptions = {
     },
   },
   session: {
-    strategy: "jwt"
+    strategy: "jwt",
+    maxAge: 30 * 24 * 60 * 60, // 30 days
   },
+  pages: {
+    signIn: "/signin",
+    error: "/signin",
+  },
+  secret: process.env.AUTH_SECRET,
 };
 
 export const getAuthSession = () => getServerSession(authOptions);

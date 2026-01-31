@@ -14,35 +14,57 @@ import MessageBubble from "@/components/chatComponents/MessageBubble";
 import EmptyState from "@/components/chatComponents/EmptyState";
 import VoiceMode from "@/components/chatComponents/VoiceMode";
 
+// Maximum anonymous messages allowed
+const MAX_ANONYMOUS_MESSAGES = 5;
+
 export default function ChatPage() {
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const [isPremium, setIsPremium] = useState(false);
   const [isVoiceModeOpen, setIsVoiceModeOpen] = useState(false);
-  const { data: session, status: Sessionstatus } = useSession();
+  const { data: session, status: sessionStatus } = useSession();
   const [anonymousCount, setAnonymousCount] = useState(0);
+  const [input, setInput] = useState("");
 
+  // Load anonymous count from localStorage on mount
   useEffect(() => {
-    if (Sessionstatus === "unauthenticated") {
+    if (sessionStatus === "unauthenticated") {
       const count = localStorage.getItem("anonymousMessageCount");
-      setAnonymousCount(count ? parseInt(count) : 0);
+      setAnonymousCount(count ? parseInt(count, 10) : 0);
     }
-  }, [Sessionstatus]);
+  }, [sessionStatus]);
 
+  // Check premium status for authenticated users
   useEffect(() => {
-    const checkPremiumStatus = async () => {
-      try {
-        const res = await fetch("/api/check-subscription");
-        const data = await res.json();
-        if (data.isPremium) {
-          setIsPremium(true);
-          toast.success("🎉 Premium features enabled!");
+    if (sessionStatus === "authenticated" && session?.user) {
+      const checkPremiumStatus = async () => {
+        try {
+          const res = await fetch("/api/check-subscription");
+          if (!res.ok) throw new Error("Failed to check subscription");
+          const data = await res.json();
+          if (data.isPremium) {
+            setIsPremium(true);
+          }
+        } catch (err) {
+          console.error("Failed to check subscription:", err);
         }
-      } catch (err) {
-        console.error("Failed to check subscription:", err);
-      }
-    };
+      };
 
-    checkPremiumStatus();
+      checkPremiumStatus();
+    }
+  }, [sessionStatus, session]);
+
+  // Handle chat errors with better user feedback
+  const handleChatError = useCallback((error: Error) => {
+    console.error("Chat error:", error);
+    
+    // Check for specific error types
+    if (error.message?.includes("quota") || error.message?.includes("429")) {
+      toast.error("AI service quota exceeded. Please try again in a few minutes.");
+    } else if (error.message?.includes("network") || error.message?.includes("fetch")) {
+      toast.error("Network error. Please check your connection and try again.");
+    } else {
+      toast.error("Failed to get response. Please try again.");
+    }
   }, []);
 
   const {
@@ -58,10 +80,7 @@ export default function ChatPage() {
         userId: session?.user?.id,
       },
     }),
-    onError: (error) => {
-      console.error("Chat error:", error);
-      toast.error("Failed to get response. Please try again.");
-    },
+    onError: handleChatError,
     onFinish: (message) => {
       console.log("Message finished:", message);
     },
@@ -69,24 +88,36 @@ export default function ChatPage() {
 
   const isLoading = status === 'submitted' || status === 'streaming';
 
-  const [input, setInput] = useState("");
-
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setInput(e.target.value);
   };
 
   const checkAnonymousLimit = useCallback(() => {
-    if (Sessionstatus === "unauthenticated") {
-      if (anonymousCount >= 2) {
-        toast.error("Login required to continue chatting!");
+    if (sessionStatus === "unauthenticated") {
+      if (anonymousCount >= MAX_ANONYMOUS_MESSAGES) {
+        toast.error(`You've reached the limit of ${MAX_ANONYMOUS_MESSAGES} free messages. Please sign in to continue chatting!`, {
+          duration: 5000,
+          action: {
+            label: "Sign In",
+            onClick: () => window.location.href = "/signin",
+          },
+        });
         return false;
       }
       const newCount = anonymousCount + 1;
       setAnonymousCount(newCount);
       localStorage.setItem("anonymousMessageCount", newCount.toString());
+      
+      // Show remaining messages warning
+      const remaining = MAX_ANONYMOUS_MESSAGES - newCount;
+      if (remaining <= 2 && remaining > 0) {
+        toast.info(`${remaining} free message${remaining === 1 ? '' : 's'} remaining. Sign in for unlimited access.`, {
+          duration: 3000,
+        });
+      }
     }
     return true;
-  }, [anonymousCount, Sessionstatus]);
+  }, [anonymousCount, sessionStatus]);
 
   const handleSubmit = useCallback(
     (e: React.FormEvent<HTMLFormElement>) => {
