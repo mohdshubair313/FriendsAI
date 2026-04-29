@@ -1,5 +1,6 @@
-// import { signup } from "@/auth";
 "use client";
+
+export const dynamic = "force-dynamic";
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -10,184 +11,188 @@ import { toast } from "sonner";
 import Link from "next/link";
 import Image from "next/image";
 import Google from "@/assets/images/image.png";
+import Logo from "@/components/Logo";
+import { Eye, EyeOff, User, Mail, Lock } from "lucide-react";
+import { signupSchema } from "@/lib/schemas";
 
 const SignupPage = () => {
   const router = useRouter();
-  const [formData, setFormData] = useState({
-    username: "",
-    email: "",
-    password: "",
-    confirmPassword: "",
-  });
+  const [form, setForm] = useState({ username: "", email: "", password: "", confirmPassword: "" });
   const [isLoading, setIsLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setForm((p) => ({ ...p, [e.target.name]: e.target.value }));
   };
 
-  const handlesignup = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (
-      !formData.username ||
-      !formData.email ||
-      !formData.password ||
-      !formData.confirmPassword
-    ) {
-      toast.error("Please fill all the fields");
-      return;
+    if (form.password !== form.confirmPassword) {
+      return toast.error("Passwords do not match");
     }
 
-    if (formData.password !== formData.confirmPassword) {
-      toast.error("Passwords do not match");
-      return;
-    }
+    const parsed = signupSchema.safeParse({
+      username: form.username,
+      email: form.email,
+      password: form.password,
+    });
 
-    if (formData.password.length < 6) {
-      toast.error("Password must be at least 6 characters long");
-      return;
+    if (!parsed.success) {
+      return toast.error(parsed.error.errors[0]?.message ?? "Invalid input");
     }
 
     setIsLoading(true);
-    const loadingToastId = toast.loading("Creating your account...");
+    const toastId = toast.loading("Creating your account...");
 
     try {
-      const response = await fetch("/api/auth/signup", {
+      const res = await fetch("/api/auth/signup", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          username: formData.username,
-          email: formData.email,
-          password: formData.password,
-        }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(parsed.data),
       });
 
-      const data = await response.json();
+      const data = await res.json();
 
-      if (!response.ok) {
-        toast.dismiss(loadingToastId);
-        toast.error(data.message || "Failed to create account");
+      if (!res.ok) {
+        toast.error(data.message ?? "Failed to create account", { id: toastId });
         return;
       }
 
-      toast.dismiss(loadingToastId);
-      toast.success("Account created successfully! Redirecting to sign in...");
-
-      // Clear form
-      setFormData({
-        username: "",
-        email: "",
-        password: "",
-        confirmPassword: "",
-      });
-
-      // Redirect to signin after a short delay
-      setTimeout(() => {
-        router.push("/signin");
-      }, 1500);
-    } catch (error) {
-      toast.dismiss(loadingToastId);
-      console.error("Signup error:", error);
-      toast.error("An error occurred. Please try again.");
+      toast.success("Account created! Redirecting to sign in...", { id: toastId });
+      setForm({ username: "", email: "", password: "", confirmPassword: "" });
+      setTimeout(() => router.push("/signin"), 1200);
+    } catch {
+      toast.error("An error occurred. Please try again.", { id: toastId });
     } finally {
       setIsLoading(false);
     }
   };
+
   return (
-    <div className="flex justify-center items-center min-h-screen bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-fuchsia-700 via-purple-700 to-indigo-900 overflow-hidden relative px-4">
-      {/* Fancy Gradient Glow */}
-      <div className="absolute w-96 h-96 md:w-[500px] md:h-[500px] bg-gradient-to-tr from-pink-400 via-purple-500 to-blue-500 rounded-full blur-3xl opacity-30 z-0" />
+    <div className="min-h-screen bg-stone-950 flex items-center justify-center px-4 py-12 relative overflow-hidden">
+      <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-[radial-gradient(circle,rgba(120,53,15,0.25)_0%,transparent_70%)] pointer-events-none" />
+      <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-[radial-gradient(circle,rgba(80,40,10,0.15)_0%,transparent_70%)] pointer-events-none" />
 
-      <div className="relative z-10 w-full max-w-md bg-white/20 backdrop-blur-xl border border-white/20 shadow-2xl rounded-2xl p-8">
-        <h1 className="text-3xl font-bold text-white text-center mb-2">
-          Create an Account 🚀
-        </h1>
-        <p className="text-sm text-white text-center mb-6">
-          Sign up to get started with your Friend AI
-        </p>
+      <div className="relative z-10 w-full max-w-md">
+        <Link href="/" className="flex items-center justify-center gap-3 mb-10 group">
+          <Logo className="size-10" />
+          <span className="text-xl font-semibold text-stone-100 group-hover:text-amber-400 transition-colors">
+            Friends AI
+          </span>
+        </Link>
 
-        <form onSubmit={handlesignup} className="flex flex-col gap-4">
-          <input
-            type="text"
-            name="username"
-            placeholder="Username"
-            value={formData.username}
-            onChange={handleInputChange}
-            disabled={isLoading}
-            className="px-4 py-2 rounded-lg text-white placeholder-white bg-white/10 border border-white/30 focus:ring-2 focus:ring-fuchsia-400 focus:outline-none disabled:opacity-50"
-          />
-          <input
-            type="email"
-            name="email"
-            placeholder="Email"
-            value={formData.email}
-            onChange={handleInputChange}
-            disabled={isLoading}
-            className="px-4 py-2 rounded-lg text-white placeholder-white bg-white/10 border border-white/30 focus:ring-2 focus:ring-fuchsia-400 focus:outline-none disabled:opacity-50"
-          />
-          <input
-            type="password"
-            name="password"
-            placeholder="Password"
-            value={formData.password}
-            onChange={handleInputChange}
-            disabled={isLoading}
-            className="px-4 py-2 rounded-lg text-white placeholder-white bg-white/10 border border-white/30 focus:ring-2 focus:ring-fuchsia-400 focus:outline-none disabled:opacity-50"
-          />
-          <input
-            type="password"
-            name="confirmPassword"
-            placeholder="Confirm Password"
-            value={formData.confirmPassword}
-            onChange={handleInputChange}
-            disabled={isLoading}
-            className="px-4 py-2 rounded-lg text-white placeholder-white bg-white/10 border border-white/30 focus:ring-2 focus:ring-fuchsia-400 focus:outline-none disabled:opacity-50"
-          />
-          <button
-            type="submit"
-            disabled={isLoading}
-            className="mt-2 w-full py-2 rounded-lg bg-gradient-to-r from-purple-600 via-fuchsia-500 to-pink-500 text-white font-semibold shadow-md hover:from-pink-600 hover:to-purple-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isLoading ? "Creating Account..." : "Sign Up"}
-          </button>
-        </form>
+        <div className="bg-stone-900/60 backdrop-blur-xl border border-stone-800/60 rounded-2xl p-8 shadow-[0_20px_60px_rgba(0,0,0,0.4)]">
+          <h1 className="text-2xl font-semibold text-stone-100 mb-1.5">Create your account</h1>
+          <p className="text-sm text-stone-500 mb-7">Join Friends AI — it&apos;s free to start</p>
 
-        <div className="flex items-center justify-center mt-4 text-white text-sm">
-          <span>Already have an account?</span>
-          <Link href="/signin" className="ml-2 font-medium hover:underline">
-            Sign In
-          </Link>
-        </div>
+          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+            <div className="relative">
+              <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-500 pointer-events-none" />
+              <input
+                name="username"
+                type="text"
+                placeholder="Username"
+                value={form.username}
+                onChange={handleChange}
+                disabled={isLoading}
+                required
+                className="w-full pl-10 pr-4 py-3 bg-stone-800/60 border border-stone-700/60 focus:border-amber-500/60 focus:ring-1 focus:ring-amber-500/30 text-stone-100 placeholder-stone-500 rounded-xl outline-none transition-all duration-200 text-sm disabled:opacity-50"
+              />
+            </div>
 
-        {/* Social Sign Ups */}
-        <div className="mt-6 flex flex-col gap-4">
-          <button
-            onClick={() =>
-              signIn("google", { redirect: true, callbackUrl: "/" })
-            }
-            disabled={isLoading}
-            className="w-full flex items-center justify-center gap-2 bg-white/20 backdrop-blur-md text-white border border-white/30 rounded-lg py-2 hover:bg-white/30 transition disabled:opacity-50"
-          >
-            <Image src={Google} alt="Google" width={30} height={30} />
-            Continue with Google
-          </button>
+            <div className="relative">
+              <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-500 pointer-events-none" />
+              <input
+                name="email"
+                type="email"
+                placeholder="Email address"
+                value={form.email}
+                onChange={handleChange}
+                disabled={isLoading}
+                required
+                className="w-full pl-10 pr-4 py-3 bg-stone-800/60 border border-stone-700/60 focus:border-amber-500/60 focus:ring-1 focus:ring-amber-500/30 text-stone-100 placeholder-stone-500 rounded-xl outline-none transition-all duration-200 text-sm disabled:opacity-50"
+              />
+            </div>
 
-          <button
-            onClick={() =>
-              signIn("github", { redirect: true, callbackUrl: "/" })
-            }
-            disabled={isLoading}
-            className="w-full flex items-center justify-center gap-2 bg-white/20 backdrop-blur-md text-white border border-white/30 rounded-lg py-2 hover:bg-white/30 transition disabled:opacity-50"
-          >
-            <FontAwesomeIcon icon={faGithub} className="text-white text-xl" />
-            Continue with GitHub
-          </button>
+            <div className="relative">
+              <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-500 pointer-events-none" />
+              <input
+                name="password"
+                type={showPassword ? "text" : "password"}
+                placeholder="Password (min. 6 characters)"
+                value={form.password}
+                onChange={handleChange}
+                disabled={isLoading}
+                required
+                className="w-full pl-10 pr-11 py-3 bg-stone-800/60 border border-stone-700/60 focus:border-amber-500/60 focus:ring-1 focus:ring-amber-500/30 text-stone-100 placeholder-stone-500 rounded-xl outline-none transition-all duration-200 text-sm disabled:opacity-50"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-stone-500 hover:text-stone-300 transition-colors"
+                tabIndex={-1}
+              >
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+
+            <div className="relative">
+              <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-500 pointer-events-none" />
+              <input
+                name="confirmPassword"
+                type={showPassword ? "text" : "password"}
+                placeholder="Confirm password"
+                value={form.confirmPassword}
+                onChange={handleChange}
+                disabled={isLoading}
+                required
+                className="w-full pl-10 pr-4 py-3 bg-stone-800/60 border border-stone-700/60 focus:border-amber-500/60 focus:ring-1 focus:ring-amber-500/30 text-stone-100 placeholder-stone-500 rounded-xl outline-none transition-all duration-200 text-sm disabled:opacity-50"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="mt-1 w-full py-3 bg-amber-500 hover:bg-amber-400 text-stone-950 font-semibold rounded-xl transition-all duration-200 hover:shadow-[0_0_20px_rgba(245,158,11,0.3)] disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+            >
+              {isLoading ? "Creating account..." : "Create Account"}
+            </button>
+          </form>
+
+          <div className="mt-5 flex flex-col gap-3">
+            <div className="relative flex items-center gap-3">
+              <div className="flex-1 h-px bg-stone-800" />
+              <span className="text-xs text-stone-600 shrink-0">or continue with</span>
+              <div className="flex-1 h-px bg-stone-800" />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={() => signIn("google", { callbackUrl: "/chat" })}
+                disabled={isLoading}
+                className="flex items-center justify-center gap-2.5 bg-stone-800/60 hover:bg-stone-700/60 border border-stone-700/50 text-stone-300 hover:text-stone-100 rounded-xl py-2.5 transition-all duration-200 text-sm font-medium disabled:opacity-50"
+              >
+                <Image src={Google} alt="Google" width={18} height={18} />
+                Google
+              </button>
+              <button
+                onClick={() => signIn("github", { callbackUrl: "/chat" })}
+                disabled={isLoading}
+                className="flex items-center justify-center gap-2.5 bg-stone-800/60 hover:bg-stone-700/60 border border-stone-700/50 text-stone-300 hover:text-stone-100 rounded-xl py-2.5 transition-all duration-200 text-sm font-medium disabled:opacity-50"
+              >
+                <FontAwesomeIcon icon={faGithub} className="text-base" />
+                GitHub
+              </button>
+            </div>
+          </div>
+
+          <p className="text-center text-sm text-stone-500 mt-6">
+            Already have an account?{" "}
+            <Link href="/signin" className="text-amber-400 hover:text-amber-300 transition-colors font-medium">
+              Sign in
+            </Link>
+          </p>
         </div>
       </div>
     </div>

@@ -1,10 +1,37 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { Mic, MicOff, X, Volume2, Loader2 } from "lucide-react";
+import { motion, AnimatePresence, type Variants } from "framer-motion";
+import { Mic, MicOff, X, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+
+type SpeechRecognitionAlternative = {
+    transcript: string;
+};
+
+type SpeechRecognitionResult = {
+    isFinal: boolean;
+    0: SpeechRecognitionAlternative;
+};
+
+type SpeechRecognitionEvent = {
+    resultIndex: number;
+    results: SpeechRecognitionResult[];
+};
+
+type SpeechRecognitionInstance = {
+    continuous: boolean;
+    interimResults: boolean;
+    lang: string;
+    onstart: (() => void) | null;
+    onend: (() => void) | null;
+    onresult: ((event: SpeechRecognitionEvent) => void) | null;
+    start: () => void;
+    stop: () => void;
+};
+
+type SpeechRecognitionConstructor = new () => SpeechRecognitionInstance;
 
 interface VoiceModeProps {
     isOpen: boolean;
@@ -23,15 +50,19 @@ export default function VoiceMode({
 }: VoiceModeProps) {
     const [isListening, setIsListening] = useState(false);
     const [transcript, setTranscript] = useState("");
-    const recognitionRef = useRef<any>(null);
+    const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
     const synthRef = useRef<SpeechSynthesis | null>(null);
 
     // Initialize Speech Recognition and Synthesis
     useEffect(() => {
         if (typeof window !== "undefined") {
             // Speech Recognition
+            const speechWindow = window as Window & {
+                SpeechRecognition?: SpeechRecognitionConstructor;
+                webkitSpeechRecognition?: SpeechRecognitionConstructor;
+            };
             const SpeechRecognition =
-                (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+                speechWindow.SpeechRecognition || speechWindow.webkitSpeechRecognition;
 
             if (SpeechRecognition) {
                 const recognition = new SpeechRecognition();
@@ -42,7 +73,7 @@ export default function VoiceMode({
                 recognition.onstart = () => setIsListening(true);
                 recognition.onend = () => setIsListening(false);
 
-                recognition.onresult = (event: any) => {
+                recognition.onresult = (event: SpeechRecognitionEvent) => {
                     const current = event.resultIndex;
                     const transcriptText = event.results[current][0].transcript;
                     setTranscript(transcriptText);
@@ -87,14 +118,14 @@ export default function VoiceMode({
     };
 
     // Visualizer bars animation variants
-    const barVariants = {
+    const barVariants: Variants = {
         initial: { height: 20 },
         animate: {
             height: [20, 60, 20, 80, 30],
             transition: {
                 repeat: Infinity,
                 duration: 1.5,
-                ease: "easeInOut",
+                ease: "easeInOut" as const,
             },
         },
         idle: {

@@ -1,102 +1,58 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Settings, Moon, Sun, Trash2, Sparkles } from "lucide-react";
-import clsx from "clsx";
+import { Sparkles, Crown } from "lucide-react";
 import Link from "next/link";
 import Logo from "../Logo";
-import { Button } from "@/components/ui/button";
-import { useTheme } from "next-themes";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
-export default function ChatNavbar() {
-  const { theme, setTheme } = useTheme();
+interface ChatNavbarProps {
+  isPremium?: boolean;
+}
 
+export default function ChatNavbar({ isPremium = false }: ChatNavbarProps) {
   return (
     <motion.header
-      initial={{ opacity: 0, y: -20 }}
+      initial={{ opacity: 0, y: -16 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.6, ease: "easeOut" }}
-      className={clsx(
-        "sticky top-0 z-50 w-full px-6 py-3",
-        "backdrop-blur-xl bg-white/5 dark:bg-black/40",
-        "border-b border-white/10 shadow-sm",
-        "flex items-center justify-between"
-      )}
+      transition={{ duration: 0.5, ease: "easeOut" }}
+      className="sticky top-0 z-50 w-full px-4 py-3 backdrop-blur-xl bg-stone-950/80 border-b border-stone-800/60 flex items-center justify-between"
     >
-      {/* Left: Brand & Status */}
-      <div className="flex items-center gap-4">
-        <Link href="/" className="hover:opacity-80 transition-opacity">
-          <div className="flex items-center gap-2">
-            <Logo className="w-8 h-8" />
-            <span className="font-semibold text-lg tracking-tight text-foreground hidden sm:block">
-              Nova Chat
-            </span>
-          </div>
-        </Link>
-        <div className="h-6 w-[1px] bg-border/50 hidden sm:block" />
-        <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-primary/5 border border-primary/10">
-          <span className="relative flex h-2 w-2">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+      {/* Left: Brand */}
+      <div className="flex items-center gap-3">
+        <Link href="/" className="flex items-center gap-2.5 hover:opacity-80 transition-opacity group">
+          <Logo className="w-8 h-8" />
+          <span className="font-semibold text-base tracking-tight text-stone-100 group-hover:text-amber-400 transition-colors hidden sm:block">
+            Friends AI
           </span>
-          <span className="text-xs font-medium text-muted-foreground">Online</span>
+        </Link>
+
+        <div className="hidden sm:block h-5 w-px bg-stone-800" />
+
+        <div className="flex items-center gap-2 px-2.5 py-1 rounded-full bg-stone-800/60 border border-stone-700/40">
+          <span className="relative flex h-1.5 w-1.5">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+            <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-green-500" />
+          </span>
+          <span className="text-xs font-medium text-stone-400">Online</span>
         </div>
       </div>
 
-      {/* Right: Actions */}
+      {/* Right: Premium badge or upgrade */}
       <div className="flex items-center gap-2">
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="text-muted-foreground hover:text-foreground hover:bg-white/10 transition-colors"
-                onClick={() => {
-                  // Placeholder for clear chat functionality
-                  window.location.reload();
-                }}
-              >
-                <Trash2 className="w-4 h-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Clear Chat</TooltipContent>
-          </Tooltip>
-
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="text-muted-foreground hover:text-foreground hover:bg-white/10 transition-colors"
-                onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-              >
-                <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-                <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
-                <span className="sr-only">Toggle theme</span>
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Toggle Theme</TooltipContent>
-          </Tooltip>
-
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground hover:bg-white/10 transition-colors">
-                <Settings className="w-4 h-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Settings</TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-
-        <Button
-          size="sm"
-          className="ml-2 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 text-white border-0 hover:opacity-90 transition-opacity shadow-lg shadow-purple-500/20"
-        >
-          <Sparkles className="w-3 h-3 mr-2" />
-          Upgrade
-        </Button>
+        {isPremium ? (
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/25 text-amber-400 text-xs font-medium">
+            <Crown className="w-3 h-3" />
+            Premium
+          </div>
+        ) : (
+          <Link
+            href="/#pricing"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-500 hover:bg-amber-400 text-stone-950 text-xs font-semibold transition-all duration-200 hover:shadow-[0_0_16px_rgba(245,158,11,0.35)]"
+          >
+            <Sparkles className="w-3 h-3" />
+            Upgrade
+          </Link>
+        )}
       </div>
     </motion.header>
   );

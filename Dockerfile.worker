@@ -1,0 +1,16 @@
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Install dependencies needed for tsx and workers
+COPY package.json package-lock.json ./
+RUN npm ci
+
+# Copy source code
+COPY . .
+
+# Set production environment
+ENV NODE_ENV production
+
+# Start the worker
+CMD ["npm", "run", "worker"]

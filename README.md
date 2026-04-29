@@ -1,105 +1,66 @@
-# Friends AI
+# Spherial AI — Agentic Platform
 
-Welcome to **Friends AI**, the next-generation **AI-powered social platform** designed exclusively for **developers** and **working professionals**! Whether you're feeling inspired, curious, or simply need a motivational boost, **Friends AI** matches you with virtual companions that resonate with your current mood. It's not just a tool—it's your **AI-powered friend** at work and beyond!
+Spherial AI (formerly Friends AI) is a next-generation emotional companion and conversational agent, built with a production-ready LangGraph orchestration architecture. 
 
----
+It dynamically routes user intent across specialized agents—ranging from empathetic chat and deep reasoning, to real-time multimodal voice processing and image generation.
 
 ## 🌟 Key Features
 
-### 🤝 **Mood-Based AI Interaction**
-- Select your mood—**Motivator**, **Extrovert**, **Moody**, or anything in between.
-- Get matched with an AI companion that understands your needs and supports you in real-time.
+*   **Multi-Agent Intelligence**: Powered by `LangGraph`, incoming queries are pre-processed by `Safety`, `Intent`, and `Sentiment` nodes before a `Supervisor` routes them to specialized agents (Buddy, Visual, Recommendation).
+*   **Policy-Driven Provider Routing**: Automatically selects the most efficient model based on cost, latency, and tier limits across Google (Gemini), NVIDIA (NIM), and OpenRouter.
+*   **Live Avatar (Premium)**: Real-time WebRTC-based interactive voice session. PCM audio is streamed and converted into dynamic Visemes and Gestures for full-body 3D avatar animation.
+*   **Asynchronous Media Generation**: Long-running multimodal tasks (like Flux Image Generation) are securely offloaded to a Redis-backed `BullMQ` worker pool.
+*   **Enterprise-Grade Entitlements**: A robust Mongoose `Subscription` layer with daily quota tracking, seamlessly integrated with Razorpay.
+*   **Professional Observability**: First-class integration with LangSmith for tracing agent trajectories, token usage, and latency metrics across the entire application state.
 
-### 🧑‍💻 **Community for Developers & Professionals**
-- Engage with other like-minded individuals to share experiences and ideas.
-- Create meaningful connections tailored to your professional and emotional needs.
+## 🛠 Tech Stack
 
-### 💡 **Customizable Experiences**
-- Personalize your interactions for meaningful, fun, and insightful conversations.
-- Explore how AI can enhance your **day-to-day productivity** and **mental well-being**.
+*   **Framework**: Next.js 14+ (App Router), React, TypeScript
+*   **AI Orchestration**: LangChain, LangGraph, Vercel AI SDK
+*   **Providers**: Google Gemini, OpenRouter, NVIDIA NIM, OpenAI TTS
+*   **Database**: MongoDB (Mongoose) with Global Connection Caching
+*   **Background Jobs**: BullMQ, Redis (Valkey)
+*   **State Management**: Redux Toolkit
+*   **Payments**: Razorpay
 
-### 🚀 **Seamless Integration**
-- Built on a modern **Next.js frontend and backend** and powered by **Gemini API**.
-- Intuitive design that ensures a smooth and engaging user experience.
+## 🚀 Getting Started
 
----
+### 1. Prerequisites
+- Node.js >= 18.x
+- MongoDB Instance
+- Redis / Valkey Instance
+- API Keys: Google Generative AI, OpenRouter, Razorpay
 
-## 🛠️ Tech Stack
+### 2. Installation
+```bash
+# Clone the repository
+git clone https://github.com/mohdshubair313/FriendsAI.git
+cd FriendsAI
 
-**Frontend & Backend:**
-- [Next.js](https://nextjs.org/): Full-stack framework for lightning-fast and SEO-friendly UI/UX and backend functionality.
+# Install dependencies
+npm install
 
-**Authentication:**
-- [Auth.js](https://authjs.dev/): Session-based authentication with integrated **Google** and **GitHub** OAuth.
+# Setup environment variables
+cp .env.example .env
+# Edit .env with your specific keys
+```
 
-**Payment Integration:**
-- [Razorpay](https://razorpay.com/): Secure and seamless payment gateway.
+### 3. Running Locally
+```bash
+# Start the Next.js frontend and API server
+npm run dev
+```
 
-**Database:**
-- MongoDB: Secure and scalable cloud database for all user and interaction data.
+In a separate terminal, start the background job worker (for async media):
+```bash
+npx tsx src/worker.ts
+```
 
-**Design & Animations:**
-- Tailwind CSS: Modern styling with utilities like **Tailwind Merge**.
-- ShadCN UI: Accessible and reusable component library.
-- Aceternity UI: Elegant and user-friendly design system.
-- [Three.js](https://threejs.org/) & [Framer Motion](https://www.framer.com/motion/): Stunning 3D graphics and animations.
+## 🔒 Security & Architecture
 
-**AI Model:**
-- **Gemini 2.0 Flash**: Cutting-edge AI powering mood-based virtual companion intelligence via the Gemini API.
+*   **Zero Exposed Keys**: All multimodal processes, API calls, and WebRTC handshakes are routed through secure, authenticated backend proxies. No provider keys are exposed to the browser.
+*   **HMAC Webhooks**: The BullMQ worker communicates with the Next.js server via cryptographically verified (`sha256`) signatures.
+*   **Granular Moderation**: All generated media and textual outputs pass through a `SafetyNode` and an async `ModerationQueue`, logging events to a durable `ModerationEvent` database for administrative review.
 
----
-
-## 👨‍💻 For Contributors
-
-We believe in the power of collaboration and innovation! If you’re passionate about AI, web development, or building communities, **we’d love to have you onboard**.
-
-### How to Contribute:
-1. Fork the repository.
-2. Make your amazing enhancements.
-3. Submit a pull request—we’ll review it and merge if it’s awesome!
-
-Feel free to suggest **new features** or report any bugs through the **Issues tab**.
-
-**Why contribute?**
-- Showcase your skills on a growing **AI SaaS platform**.
-- Collaborate with like-minded individuals in the tech industry.
-- Be part of a revolution in AI-powered productivity and mental well-being apps.
-
----
-
-## 📈 Future Ideas & Enhancements
-
-Here are some exciting ideas to take **Friends AI** to the next level:
-
-1. **Mood-Based Group Chats:**
-   - Enable users to join virtual AI-powered group discussions based on their current mood.
-
-2. **AI Event Scheduler:**
-   - Add a feature where the AI helps schedule meetups, hackathons, or coffee chats with other developers and professionals.
-
-3. **Real-Time Insights:**
-   - Integrate real-time productivity tips or motivational quotes during interactions.
-
-4. **Gamification:**
-   - Add badges and achievements for regular users and contributors to keep the experience fun and engaging.
-
-5. **Integration with Tools:**
-   - Connect with Slack, Jira, or Trello to enable professionals to seamlessly incorporate Friends AI into their workday.
-
----
-
-## 💬 Feedback & Support
-
-Your feedback is our fuel for growth! Let us know how we can improve by submitting issues or feature requests. We’re always excited to hear your ideas and make Friends AI even better.
-
-**Connect with us:**
-- [Website](#)
-- [Twitter](#)
-- [GitHub Issues](#)
-
----
-
-## 🥂 Join the Revolution
-
-Experience the power of **AI friendship** today and become a part of the growing **Friends AI community**. Whether you’re a developer, designer, or working professional, **Friends AI** is here to connect, inspire, and uplift you!
-
+## 📄 License
+Private Repository. All rights reserved.

@@ -14,8 +14,8 @@ export const authOptions: NextAuthOptions = {
       allowDangerousEmailAccountLinking: true,
     }),
     GithubProvider({
-      clientId: process.env.GITHUB_CLIENT_ID as string,
-      clientSecret: process.env.GITHUB_CLIENT_SECRET as string,
+      clientId: process.env.GITHUB_ID as string,
+      clientSecret: process.env.GITHUB_SECRET as string,
       allowDangerousEmailAccountLinking: true,
     }),
     CredentialsProvider({
@@ -67,13 +67,13 @@ export const authOptions: NextAuthOptions = {
       if (account && (account.provider === "google" || account.provider === "github")) {
         try {
           await connectToDb();
-          
+
           const existingUser = await User.findOne({ email: user.email });
-          
+
           if (!existingUser) {
             // Create new user for OAuth
             await User.create({
-              username: user.name || profile?.name || user.email?.split('@')[0],
+              username: user.name || profile?.name || user.email?.split("@")[0],
               email: user.email,
               image: user.image,
               ...(account.provider === "google" ? { googleId: account.providerAccountId } : {}),
@@ -81,7 +81,7 @@ export const authOptions: NextAuthOptions = {
             });
           } else {
             // Update existing user with OAuth ID if not present
-            const updateData: any = {};
+            const updateData: Record<string, string> = {};
             if (account.provider === "google" && !existingUser.googleId) {
               updateData.googleId = account.providerAccountId;
             }

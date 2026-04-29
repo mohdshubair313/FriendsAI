@@ -1,271 +1,181 @@
 "use client";
 
-import { useChat } from '@ai-sdk/react';
-import { useEffect, useRef, useState, useCallback } from "react";
+export const dynamic = "force-dynamic";
+
+import { useEffect, useCallback, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import Image from "next/image";
-import { toast } from "sonner";
 import { useSession } from "next-auth/react";
-import { DefaultChatTransport } from 'ai';
 
 import ChatNavbar from "@/components/chatComponents/ChatNavbar";
 import ChatInput from "@/components/chatComponents/ChatInput";
-import MessageBubble from "@/components/chatComponents/MessageBubble";
+import MessageList from "@/components/chatComponents/MessageList";
 import EmptyState from "@/components/chatComponents/EmptyState";
 import VoiceMode from "@/components/chatComponents/VoiceMode";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import { fetchPremiumStatus } from "@/store/slices/premiumSlice";
+import { sounds } from "@/lib/sounds";
 
-// Maximum anonymous messages allowed
-const MAX_ANONYMOUS_MESSAGES = 5;
+export const MOODS = [
+  { id: "friendly",      label: "Friendly",       emoji: "😊" },
+  { id: "happy",         label: "Happy",           emoji: "😄" },
+  { id: "sad",           label: "Sad",             emoji: "😢" },
+  { id: "funny",         label: "Funny",           emoji: "😂" },
+  { id: "motivational",  label: "Motivational",    emoji: "💪" },
+  { id: "romantic",      label: "Romantic",        emoji: "💝" },
+  { id: "philosophical", label: "Philosophical",   emoji: "🧠" },
+  { id: "angry",         label: "Calm me down",    emoji: "😤" },
+];
 
 export default function ChatPage() {
-  const bottomRef = useRef<HTMLDivElement | null>(null);
-  const [isPremium, setIsPremium] = useState(false);
   const [isVoiceModeOpen, setIsVoiceModeOpen] = useState(false);
-  const { data: session, status: sessionStatus } = useSession();
-  const [anonymousCount, setAnonymousCount] = useState(0);
   const [input, setInput] = useState("");
 
-  // Load anonymous count from localStorage on mount
+  const { data: session, status: sessionStatus } = useSession();
+  const dispatch = useAppDispatch();
+  const selectedMood = useAppSelector((s) => s.chat.selectedMood);
+  const isPremium = useAppSelector((s) => s.premium.isPremium);
+  const premiumStatus = useAppSelector((s) => s.premium.status);
+
   useEffect(() => {
-    if (sessionStatus === "unauthenticated") {
-      const count = localStorage.getItem("anonymousMessageCount");
-      setAnonymousCount(count ? parseInt(count, 10) : 0);
+    if (sessionStatus === "authenticated" && premiumStatus === "idle") {
+      dispatch(fetchPremiumStatus());
     }
-  }, [sessionStatus]);
+  }, [sessionStatus, premiumStatus, dispatch]);
 
-  // Check premium status for authenticated users
-  useEffect(() => {
-    if (sessionStatus === "authenticated" && session?.user) {
-      const checkPremiumStatus = async () => {
-        try {
-          const res = await fetch("/api/check-subscription");
-          if (!res.ok) throw new Error("Failed to check subscription");
-          const data = await res.json();
-          if (data.isPremium) {
-            setIsPremium(true);
-          }
-        } catch (err) {
-          console.error("Failed to check subscription:", err);
-        }
-      };
-
-      checkPremiumStatus();
-    }
-  }, [sessionStatus, session]);
-
-  // Handle chat errors with better user feedback
-  const handleChatError = useCallback((error: Error) => {
-    console.error("Chat error:", error);
-    
-    // Check for specific error types
-    if (error.message?.includes("quota") || error.message?.includes("429")) {
-      toast.error("AI service quota exceeded. Please try again in a few minutes.");
-    } else if (error.message?.includes("network") || error.message?.includes("fetch")) {
-      toast.error("Network error. Please check your connection and try again.");
-    } else {
-      toast.error("Failed to get response. Please try again.");
-    }
-  }, []);
-
-  const {
-    messages,
-    status,
-    sendMessage,
-    error,
-  } = useChat({
-    transport: new DefaultChatTransport({
-      api: '/api/generate',
-      body: {
-        mood: "friendly",
-        userId: session?.user?.id,
-      },
-    }),
-    onError: handleChatError,
-    onFinish: (message) => {
-      console.log("Message finished:", message);
-    },
-  });
-
-  const isLoading = status === 'submitted' || status === 'streaming';
+  // Use direct fetch instead of useChat to avoid streaming issues
+  const [messages, setMessages] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setInput(e.target.value);
   };
 
-  const checkAnonymousLimit = useCallback(() => {
-    if (sessionStatus === "unauthenticated") {
-      if (anonymousCount >= MAX_ANONYMOUS_MESSAGES) {
-        toast.error(`You've reached the limit of ${MAX_ANONYMOUS_MESSAGES} free messages. Please sign in to continue chatting!`, {
-          duration: 5000,
-          action: {
-            label: "Sign In",
-            onClick: () => window.location.href = "/signin",
-          },
-        });
-        return false;
-      }
-      const newCount = anonymousCount + 1;
-      setAnonymousCount(newCount);
-      localStorage.setItem("anonymousMessageCount", newCount.toString());
-      
-      // Show remaining messages warning
-      const remaining = MAX_ANONYMOUS_MESSAGES - newCount;
-      if (remaining <= 2 && remaining > 0) {
-        toast.info(`${remaining} free message${remaining === 1 ? '' : 's'} remaining. Sign in for unlimited access.`, {
-          duration: 3000,
-        });
-      }
-    }
-    return true;
-  }, [anonymousCount, sessionStatus]);
-
-  const handleSubmit = useCallback(
-    (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmitCallback = useCallback(
+    async (e: React.FormEvent<HTMLFormElement>) => {
       e.preventDefault();
-      if (!checkAnonymousLimit()) return;
-      if (!input.trim()) {
-        toast.error("Please enter a message");
-        return;
-      }
-      sendMessage({ text: input });
+      if (!input.trim() || isLoading) return;
+      
+      const userMessage = { role: "user", content: input };
+      const currentInput = input;
+      
+      // Add user message immediately to show in UI
+      setMessages(prev => [...prev, userMessage]);
+      
+      sounds.playWhoosh();
       setInput("");
-    },
-    [checkAnonymousLimit, input, sendMessage],
-  );
+      setIsLoading(true);
 
-  const handleVoiceMessage = useCallback(
-    (message: string) => {
-      if (!checkAnonymousLimit()) return;
-      if (!message.trim()) {
-        toast.error("No message detected. Please try again.");
-        return;
+      try {
+        const res = await fetch("/api/orchestrate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            messages: [userMessage],  // Just send the new message
+            mood: selectedMood,
+          }),
+        });
+
+        const data = await res.json();
+        console.log("Chat response:", data);
+        
+        if (data.error) {
+          console.error("Chat error:", data.error);
+          setIsLoading(false);
+          return;
+        }
+
+        // Handle the response format from our API
+        if (data.messages?.[0]?.content) {
+          const aiMessage = { role: "assistant", content: data.messages[0].content };
+          setMessages(prev => [...prev, aiMessage]);
+        } else {
+          console.error("No response content:", data);
+        }
+      } catch (err) {
+        console.error("Failed to send:", err);
+      } finally {
+        setIsLoading(false);
       }
-      sendMessage({ text: message });
     },
-    [checkAnonymousLimit, sendMessage],
+    [input, isLoading, selectedMood]
   );
 
   const handleSuggestionClick = (prompt: string) => {
-    setInput(prompt);
+    sounds.playClick();
+    // Trigger submit with the prompt
+    const userMessage = { role: "user", content: prompt };
+    setMessages(prev => [...prev, userMessage]);
+    setIsLoading(true);
+    
+    fetch("/api/orchestrate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        messages: [...messages, userMessage],
+        mood: selectedMood,
+      }),
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (data.messages?.[0]?.content) {
+        setMessages(prev => [...prev, { role: "assistant", content: data.messages[0].content }]);
+      }
+    })
+    .finally(() => setIsLoading(false));
   };
 
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
-
   return (
-    <div className="relative min-h-screen bg-background text-foreground overflow-hidden flex flex-col">
-      {/* Background Ambient Glow */}
-      <div className="fixed inset-0 z-0 pointer-events-none">
-        <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] rounded-full bg-purple-500/5 blur-[120px]" />
-        <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] rounded-full bg-indigo-500/5 blur-[120px]" />
-      </div>
+    <div className="relative h-full flex flex-col overflow-hidden">
+      <ChatNavbar isPremium={isPremium} />
 
-      <ChatNavbar />
-
-      <main className="flex-1 relative z-10 flex flex-col max-w-4xl mx-auto w-full h-full overflow-hidden">
-        <div className="flex-1 overflow-y-auto px-4 py-6 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
-          {messages.length === 0 ? (
-            <EmptyState onSelect={handleSuggestionClick} />
-          ) : (
-            <div className="space-y-6 pb-4">
-              <AnimatePresence initial={false}>
-                {messages.map((m, i) => {
-                  const message = m as any;
-                  // Handle image messages (if you have custom logic for images)
-                  if (message.role === "data" && message.type === "image") {
-                    return (
-                      <motion.div
-                        key={m.id || `image-${i}`}
-                        initial={{ opacity: 0, scale: 0.95 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        className="flex justify-start mb-6"
-                      >
-                        <div className="rounded-2xl overflow-hidden shadow-lg border border-white/10 bg-white/5 p-2 max-w-sm">
-                          {message.base64 ? (
-                            <Image
-                              src={message.base64 as string}
-                              alt="Generated AI"
-                              width={512}
-                              height={512}
-                              className="w-full h-auto object-cover rounded-xl"
-                              unoptimized
-                            />
-                          ) : (
-                            <p className="text-center text-muted-foreground p-4">
-                              Image generation failed
-                            </p>
-                          )}
-                          <p className="text-xs text-muted-foreground text-center mt-2">
-                            Generated by Nova 🔮
-                          </p>
-                        </div>
-                      </motion.div>
-                    );
-                  }
-
-                  // Handle regular text messages
-                  if (["user", "assistant", "system"].includes(m.role)) {
-                    // Extract text content from parts
-                    const textContent = m.parts
-                      .filter((p: any) => p.type === 'text')
-                      .map((p: any) => p.text)
-                      .join(' ');
-                    return (
-                      <MessageBubble
-                        key={m.id}
-                        role={m.role as "user" | "assistant" | "system"}
-                        content={textContent}
-                      />
-                    );
-                  }
-                  return null;
-                })}
-              </AnimatePresence>
-              {isLoading && (
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="flex justify-start ml-12"
-                >
-                  <div className="flex items-center gap-1 px-4 py-3 rounded-2xl bg-white/5 border border-white/10">
-                    <span className="w-1.5 h-1.5 bg-muted-foreground rounded-full animate-bounce [animation-delay:-0.3s]"></span>
-                    <span className="w-1.5 h-1.5 bg-muted-foreground rounded-full animate-bounce [animation-delay:-0.15s]"></span>
-                    <span className="w-1.5 h-1.5 bg-muted-foreground rounded-full animate-bounce"></span>
-                  </div>
-                </motion.div>
-              )}
-              <div ref={bottomRef} />
-            </div>
-          )}
-        </div>
-
-        <div className="relative z-20">
-          <ChatInput
-            input={input}
-            handleInputChange={handleInputChange}
-            handleSubmit={handleSubmit}
-            isLoading={isLoading}
-            isPremium={isPremium}
-            onVoiceClick={() => setIsVoiceModeOpen(true)}
-          />
-        </div>
+      <main className="flex-1 flex flex-col min-w-0 overflow-hidden pt-12">
+        {messages.length === 0 ? (
+          <EmptyState onSelect={handleSuggestionClick} selectedMood={selectedMood} />
+        ) : (
+          <MessageList messages={messages as any} isLoading={isLoading} />
+        )}
       </main>
 
-      <VoiceMode
-        isOpen={isVoiceModeOpen}
-        onClose={() => setIsVoiceModeOpen(false)}
-        onSendMessage={handleVoiceMessage}
-        isProcessing={isLoading}
-        lastMessage={
-          messages[messages.length - 1]?.role === "assistant"
-            ? messages[messages.length - 1].parts
-              .filter((p: any) => p.type === 'text')
-              .map((p: any) => p.text)
-              .join(' ')
-            : undefined
-        }
+<ChatInput
+        input={input}
+        handleInputChange={handleInputChange}
+        handleSubmit={handleSubmitCallback}
+        isLoading={isLoading}
+        isPremium={isPremium}
+        onVoiceClick={() => { sounds.playClick(); setIsVoiceModeOpen(true); }}
+        selectedMood={selectedMood}
       />
+
+      <AnimatePresence>
+        {isVoiceModeOpen && (
+          <VoiceMode
+            isOpen={isVoiceModeOpen}
+            onClose={() => setIsVoiceModeOpen(false)}
+            onSendMessage={(m) => {
+              setMessages(prev => [...prev, { role: "user", content: m }]);
+              // Send the message via API
+              setIsLoading(true);
+              fetch("/api/orchestrate", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  messages: [...messages, { role: "user", content: m }],
+                  mood: selectedMood,
+                }),
+              })
+              .then(res => res.json())
+              .then(data => {
+                if (data.messages?.[0]?.content) {
+                  setMessages(prev => [...prev, { role: "assistant", content: data.messages[0].content }]);
+                }
+              })
+              .finally(() => setIsLoading(false));
+            }}
+            isProcessing={isLoading}
+            lastMessage={(messages[messages.length - 1] as any)?.content}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

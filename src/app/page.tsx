@@ -1,4 +1,6 @@
 
+export const dynamic = "force-dynamic";
+
 import ClientHomepage from "./ClientHomepage";
 import { SessionProvider } from "@/context/SessionContext";
 

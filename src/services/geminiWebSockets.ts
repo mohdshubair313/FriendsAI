@@ -1,11 +1,7 @@
-// Removed unused import for 'Base64'
 import { TranscriptionService } from './transcriptionService';
-import { pcmToWav } from '@/app/utils/audioUtils';
+import { pcmToWav } from '@/utils/audioUtils';
 
 const MODEL = "models/gemini-2.0-flash-exp";
-const API_KEY = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
-const HOST = "generativelanguage.googleapis.com";
-const WS_URL = `wss://${HOST}/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=${API_KEY}`;
 
 export class GeminiWebSocket {
   private ws: WebSocket | null = null;
@@ -25,19 +21,29 @@ export class GeminiWebSocket {
   private onTranscriptionCallback: ((text: string) => void) | null = null;
   private transcriptionService: TranscriptionService;
   private accumulatedPcmData: string[] = [];
+  private lastPingTime: number = 0;
+  private rtt: number = 0;
+  private onLatencyChange: ((rtt: number) => void) | null = null;
+  
+  // Reconnection management
+  private reconnectAttempts: number = 0;
+  private maxReconnectAttempts: number = 3;
+  private shouldDisconnect: boolean = false;
 
   constructor(
     onMessage: (text: string) => void, 
     onSetupComplete: () => void,
     onPlayingStateChange: (isPlaying: boolean) => void,
     onAudioLevelChange: (level: number) => void,
-    onTranscription: (text: string) => void
+    onTranscription: (text: string) => void,
+    onLatencyChange?: (rtt: number) => void
   ) {
     this.onMessageCallback = onMessage;
     this.onSetupCompleteCallback = onSetupComplete;
     this.onPlayingStateChange = onPlayingStateChange;
     this.onAudioLevelChange = onAudioLevelChange;
     this.onTranscriptionCallback = onTranscription;
+    this.onLatencyChange = onLatencyChange || null;
     // Create AudioContext for playback
     this.audioContext = new AudioContext({
       sampleRate: 24000  // Match the response audio rate
@@ -45,47 +51,75 @@ export class GeminiWebSocket {
     this.transcriptionService = new TranscriptionService();
   }
 
-  connect() {
+  async connect() {
     if (this.ws?.readyState === WebSocket.OPEN) {
       return;
     }
-    
-    this.ws = new WebSocket(WS_URL);
 
-    this.ws.onopen = () => {
-      this.isConnected = true;
-      this.sendInitialSetup();
-    };
+    if (this.shouldDisconnect) {
+      return;
+    }
 
-    this.ws.onmessage = async (event) => {
-      try {
-        let messageText: string;
-        if (event.data instanceof Blob) {
-          const arrayBuffer = await event.data.arrayBuffer();
-          const bytes = new Uint8Array(arrayBuffer);
-          messageText = new TextDecoder('utf-8').decode(bytes);
-        } else {
-          messageText = event.data;
+    try {
+      const res = await fetch("/api/voice/session");
+      if (!res.ok) {
+        const errorData = await res.json();
+        console.error("Failed to get voice session:", errorData.error);
+        if (this.onMessageCallback) {
+           this.onMessageCallback("System: " + (errorData.error || "Failed to connect."));
         }
-        
-        await this.handleMessage(messageText);
-      } catch (error) {
-        console.error("[WebSocket] Error processing message:", error);
+        return;
       }
-    };
-
-    this.ws.onerror = (error) => {
-      console.error("[WebSocket] Error:", error);
-    };
-
-    this.ws.onclose = (event) => {
-      this.isConnected = false;
       
-      // Only attempt to reconnect if we haven't explicitly called disconnect
-      if (!event.wasClean && this.isSetupComplete) {
-        setTimeout(() => this.connect(), 1000);
-      }
-    };
+      const { wsUrl, config } = await res.json();
+      const fullUrl = config ? `${wsUrl}?key=${process.env.NEXT_PUBLIC_GOOGLE_API_KEY || ''}` : wsUrl;
+      this.ws = new WebSocket(fullUrl);
+
+      this.ws.onopen = () => {
+        this.isConnected = true;
+        this.reconnectAttempts = 0;
+        this.sendInitialSetup();
+        this.startHeartbeat();
+      };
+
+      this.ws.onmessage = async (event) => {
+        try {
+          let messageText: string;
+          if (event.data instanceof Blob) {
+            const arrayBuffer = await event.data.arrayBuffer();
+            const bytes = new Uint8Array(arrayBuffer);
+            messageText = new TextDecoder('utf-8').decode(bytes);
+          } else {
+            messageText = event.data;
+          }
+          
+          await this.handleMessage(messageText);
+        } catch (error) {
+          console.error("[WebSocket] Error processing message:", error);
+        }
+      };
+
+      this.ws.onerror = (error) => {
+        console.error("[WebSocket] Error:", error);
+      };
+
+      this.ws.onclose = (event) => {
+        this.isConnected = false;
+        
+        if (!event.wasClean && this.isSetupComplete && this.reconnectAttempts < this.maxReconnectAttempts) {
+          this.reconnectAttempts++;
+          console.log(`[WebSocket] Reconnecting (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})...`);
+          setTimeout(() => this.connect(), 1000 * this.reconnectAttempts);
+        } else if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+          console.error("[WebSocket] Max reconnection attempts reached");
+          if (this.onMessageCallback) {
+            this.onMessageCallback("System: Connection lost. Please refresh and try again.");
+          }
+        }
+      };
+    } catch (error) {
+      console.error("[WebSocket] Connection initialization error:", error);
+    }
   }
 
   private sendInitialSetup() {
@@ -212,6 +246,7 @@ export class GeminiWebSocket {
   }
 
   private async handleMessage(message: string) {
+    this.handlePong();
     try {
       const messageData = JSON.parse(message);
       
@@ -258,7 +293,9 @@ export class GeminiWebSocket {
   }
 
   disconnect() {
+    this.shouldDisconnect = true;
     this.isSetupComplete = false;
+    this.reconnectAttempts = 0;
     if (this.ws) {
       this.ws.close(1000, "Intentional disconnect");
       this.ws = null;
@@ -266,4 +303,22 @@ export class GeminiWebSocket {
     this.isConnected = false;
     this.accumulatedPcmData = [];
   }
-} 
+
+  private startHeartbeat() {
+    setInterval(() => {
+      if (this.isConnected && this.ws?.readyState === WebSocket.OPEN) {
+        this.lastPingTime = performance.now();
+        // Sending a chasm message to trigger a response for RTT
+        this.ws.send(JSON.stringify({ client_content: { turns: [], turn_complete: false } }));
+      }
+    }, 5000);
+  }
+
+  private handlePong() {
+    if (this.lastPingTime > 0) {
+      this.rtt = Math.floor(performance.now() - this.lastPingTime);
+      this.onLatencyChange?.(this.rtt);
+      this.lastPingTime = 0;
+    }
+  }
+}

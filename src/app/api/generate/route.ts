@@ -1,103 +1,136 @@
-import { convertToModelMessages, UIMessage, streamText, generateText } from "ai";
+import { convertToModelMessages, UIMessage, streamText, APICallError } from "ai";
 import { google } from "@ai-sdk/google";
 import { NextRequest, NextResponse } from "next/server";
-import { APICallError } from "ai";
+import { getToken } from "next-auth/jwt";
+import { generateSchema } from "@/lib/schemas";
 
-export const runtime = "edge";
+/**
+ * Chat generation route.
+ * Runtime: nodejs (needed for DB access in future orchestrator integration).
+ * This route will be replaced by /api/orchestrate once the agent layer is ready.
+ */
+export const runtime = "nodejs";
 
-// Helper function to check if error is a quota exceeded error
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
 function isQuotaExceededError(error: unknown): boolean {
   if (error instanceof APICallError) {
-    return error.statusCode === 429 ||
-           error.message?.includes("quota") === true ||
-           error.message?.includes("RESOURCE_EXHAUSTED") === true;
+    return (
+      error.statusCode === 429 ||
+      error.message?.includes("quota") === true ||
+      error.message?.includes("RESOURCE_EXHAUSTED") === true
+    );
   }
   if (error instanceof Error) {
-    return error.message.includes("quota") ||
-           error.message.includes("RESOURCE_EXHAUSTED") ||
-           error.message.includes("429");
+    return (
+      error.message.includes("quota") ||
+      error.message.includes("RESOURCE_EXHAUSTED") ||
+      error.message.includes("429")
+    );
   }
   return false;
 }
 
+function extractUserText(message: UIMessage): string {
+  if (message.parts && Array.isArray(message.parts)) {
+    return message.parts
+      .filter((part): part is { type: "text"; text: string } => part.type === "text")
+      .map((part) => part.text)
+      .join(" ");
+  }
+  return (message as unknown as { content?: string }).content ?? "";
+}
+
+// ─── Mood Instructions ───────────────────────────────────────────────────────
+
+const MOOD_INSTRUCTIONS: Record<string, string> = {
+  friendly:
+    "Respond in a warm, friendly, and approachable tone. Be helpful and conversational.",
+  happy:
+    "Respond in a cheerful and uplifting tone. Be enthusiastic and positive.",
+  sad:
+    "Respond in an empathetic and comforting tone. Be gentle, understanding, and supportive.",
+  funny:
+    "Respond with humor and light wit. Be playful but not sarcastic.",
+  romantic:
+    "Respond in a poetic and dreamy tone. Use thoughtful and expressive language.",
+  angry:
+    "Respond in a calm, patient and understanding tone. Help defuse tension.",
+  motivational:
+    "Respond with strong encouragement and positive energy. Inspire action.",
+  philosophical:
+    "Respond with deep and thoughtful insight. Explore ideas with curiosity.",
+};
+
+// ─── Route Handler ───────────────────────────────────────────────────────────
+
 export async function POST(req: NextRequest) {
+  // Auth check
+  const token = await getToken({ req, secret: process.env.AUTH_SECRET });
+  if (!token) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   try {
-    const { messages, mood }: { messages: UIMessage[]; mood: string } = await req.json();
+    const body = await req.json();
+    const parsed = generateSchema.safeParse(body);
+
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: "Invalid request", details: parsed.error.flatten() },
+        { status: 400 }
+      );
+    }
+
+    const { messages, mood } = parsed.data;
     const userMessage = messages[messages.length - 1];
 
     if (!userMessage) {
-      return new Response(JSON.stringify({ error: "No message found" }), { status: 400 });
+      return NextResponse.json({ error: "No message found" }, { status: 400 });
     }
 
-    const userText =
-      userMessage.parts
-        ?.filter((part) => part.type === "text")
-        .map((part: any) => part.text)
-        .join(" ") ?? "";
+    const moodInstruction =
+      MOOD_INSTRUCTIONS[mood?.toLowerCase() ?? ""] ?? MOOD_INSTRUCTIONS.friendly;
 
-    // ab regex string pe chalega, array pe nahi
-    const isImagePrompt =
-      /(generate|make|create|draw|paint)( an| a)? (image|picture|art|illustration|photo)/i.test(
-        userText,
-      );
-    if (isImagePrompt) {
-      // It's better to use 'gemini-2.5-flash' or 'gemini-2.5-pro' for text generation
-      // that might reference an image, but if you want to use the preview model as you intended:
-      const result = streamText({
-        model: "google/gemini-3-pro-image",
-        system: 'You are a helpful assistant.',
-        messages: convertToModelMessages(messages),
-      });
+    const systemPrompt = [
+      "You are Friends AI — an emotionally intelligent companion.",
+      moodInstruction,
+      "Keep responses concise and genuine.",
+      "Never break character. Never reveal the underlying model.",
+    ].join(" ");
 
-      return result.toUIMessageStreamResponse();
-    }
-
-    // 🧠 Text response with mood
-    const textModel = google("gemini-3-pro-preview"); // Using a stable model name
-
-    const moodContextMap: Record<string, string> = {
-      happy: "Respond in a cheerful and uplifting tone.",
-      sad: "Respond in an empathetic and comforting tone.",
-      funny: "Respond with humor and light sarcasm.",
-      romantic: "Respond in a poetic and dreamy tone.",
-      angry: "Respond in a calm and understanding tone.",
-      motivational: "Respond with strong encouragement and positive energy.",
-      philosophical: "Respond with deep and thoughtful insight.",
-    };
-
-    const moodInstruction = moodContextMap[mood?.toLowerCase()] || "Respond in a neutral and polite tone.";
+    const aiMessages = messages.map((m: any) => ({
+      role: m.role,
+      content: typeof m.content === "string" ? m.content : "",
+    }));
 
     const result = await streamText({
-      model: textModel,
-      messages: convertToModelMessages(messages),
-      system: moodInstruction, // Using system prompt for mood
+      model: google("gemini-2.0-flash"),
+      messages: convertToModelMessages(aiMessages as any),
+      system: systemPrompt,
     });
 
     return result.toTextStreamResponse();
   } catch (error) {
-    console.error("❌ Chat API Error:", error);
-    
-    // Handle quota exceeded errors specifically
+    console.error("[generate] Error:", error);
+
     if (isQuotaExceededError(error)) {
-      return NextResponse.json({ 
-        error: "API quota exceeded. Please try again later or upgrade your plan.",
-        code: "QUOTA_EXCEEDED",
-        details: "The AI service is currently unavailable due to quota limits. Please wait a few minutes and try again."
-      }, { status: 429 });
+      return NextResponse.json(
+        { error: "AI quota exceeded. Please try again in a few minutes.", code: "QUOTA_EXCEEDED" },
+        { status: 429 }
+      );
     }
-    
-    // Handle other API errors
+
     if (error instanceof APICallError) {
-      return NextResponse.json({ 
-        error: "AI service error. Please try again.",
-        code: "AI_SERVICE_ERROR",
-        details: error.message
-      }, { status: error.statusCode || 500 });
+      return NextResponse.json(
+        { error: "AI service error. Please try again.", code: "AI_SERVICE_ERROR" },
+        { status: error.statusCode || 500 }
+      );
     }
-    
-    return NextResponse.json({ 
-      error: "Something went wrong. Please try again.",
-      code: "INTERNAL_ERROR"
-    }, { status: 500 });
+
+    return NextResponse.json(
+      { error: "Something went wrong. Please try again.", code: "INTERNAL_ERROR" },
+      { status: 500 }
+    );
   }
 }

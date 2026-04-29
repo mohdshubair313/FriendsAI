@@ -1,42 +1,69 @@
-import { Resend } from 'resend';
+import { Resend } from "resend";
+import { NextResponse } from "next/server";
+import { feedbackSchema } from "@/lib/schemas";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+export const dynamic = "force-dynamic";
+
+function esc(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
 
 export async function POST(req: Request) {
+  const resend = new Resend(process.env.RESEND_API_KEY);
   const body = await req.json();
-  const { name, email, message } = body;
+  const parsed = feedbackSchema.safeParse(body);
+
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: parsed.error.errors[0]?.message ?? "Invalid input" },
+      { status: 400 }
+    );
+  }
+
+  const { name, email, message } = parsed.data;
+  const safeName = esc(name);
+  const safeEmail = esc(email);
+  const safeMessage = esc(message).replace(/\n/g, "<br>");
 
   try {
-    // 1. Send to YOU
     await resend.emails.send({
-      from: 'Shubair <onboarding@resend.dev>',
-      to: ['shubair313@gmail.com'], // your email
-      subject: `📬 New Feedback from ${name}`,
+      from: "Friends AI <onboarding@resend.dev>",
+      to: ["shubair313@gmail.com"],
+      subject: `New Feedback from ${safeName}`,
       html: `
-        <h3>You've received a new feedback!</h3>
-        <p><strong>Name:</strong> ${name}</p>
-        <p><strong>Email:</strong> ${email}</p>
-        <p><strong>Message:</strong><br/>${message}</p>
+        <div style="font-family:sans-serif;max-width:600px;margin:0 auto">
+          <h2 style="color:#f59e0b">New Feedback Received</h2>
+          <p><strong>Name:</strong> ${safeName}</p>
+          <p><strong>Email:</strong> ${safeEmail}</p>
+          <p><strong>Message:</strong></p>
+          <blockquote style="border-left:3px solid #f59e0b;padding-left:12px;color:#555">${safeMessage}</blockquote>
+        </div>
       `,
     });
 
-    // 2. Auto reply to USER
     await resend.emails.send({
-      from: 'Shubair <onboarding@resend.dev>',
+      from: "Friends AI <onboarding@resend.dev>",
       to: [email],
-      subject: `Thanks for your Feedback, ${name}!`,
+      subject: `Thanks for your feedback, ${safeName}!`,
       html: `
-        <h3>Hey ${name},</h3>
-        <p>Thanks a lot for your feedback! 💜</p>
-        <p>We truly value your time and input.</p>
-        <br/>
-        <p>- Team Shubair</p>
+        <div style="font-family:sans-serif;max-width:600px;margin:0 auto">
+          <h2 style="color:#f59e0b">Thanks, ${safeName}!</h2>
+          <p>We received your feedback and truly appreciate you taking the time.</p>
+          <p>We'll review it and get back to you if needed.</p>
+          <br/>
+          <p style="color:#888">— The Friends AI Team</p>
+        </div>
       `,
     });
 
-    return Response.json({ success: true });
+    return NextResponse.json({ success: true });
   } catch (error) {
     console.error(error);
-    return new Response("Something went wrong", { status: 500 });
+    return NextResponse.json({ error: "Failed to send email" }, { status: 500 });
   }
 }

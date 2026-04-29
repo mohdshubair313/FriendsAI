@@ -1,0 +1,56 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: spherial-ai-app
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - VALKEY_URL=redis://valkey:6379
+      - MONGODB_URI=mongodb://mongodb:27017/spherial-ai
+    env_file:
+      - .env
+    depends_on:
+      - valkey
+      - mongodb
+    restart: always
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    container_name: spherial-ai-worker
+    environment:
+      - NODE_ENV=production
+      - VALKEY_URL=redis://valkey:6379
+      - MONGODB_URI=mongodb://mongodb:27017/spherial-ai
+    env_file:
+      - .env
+    depends_on:
+      - valkey
+      - mongodb
+    restart: always
+
+  valkey:
+    image: valkey/valkey:latest
+    container_name: spherial-ai-valkey
+    ports:
+      - "6379:6379"
+    volumes:
+      - valkey_data:/data
+    restart: always
+
+  mongodb:
+    image: mongo:latest
+    container_name: spherial-ai-mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    restart: always
+
+volumes:
+  valkey_data:
+  mongodb_data:

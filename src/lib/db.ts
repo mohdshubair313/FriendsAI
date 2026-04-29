@@ -1,53 +1,64 @@
 import mongoose from "mongoose";
 
-// Global variable to track connection state
-// This prevents multiple connections in development with hot reload
-let isConnected = false;
+/**
+ * MongoDB connection manager.
+ *
+ * Uses a global cache on the Node.js process to prevent
+ * creating multiple connections during dev hot-reloads.
+ */
 
-export const connectToDb = async () => {
-  // Check if already connected
-  if (isConnected) {
-    console.log("MongoDB already connected!");
-    return;
+interface MongooseCache {
+  conn: typeof mongoose | null;
+  promise: Promise<typeof mongoose> | null;
+}
+
+// Extend global to cache the connection across hot reloads
+declare global {
+  // eslint-disable-next-line no-var
+  var __mongooseCache: MongooseCache | undefined;
+}
+
+const cached: MongooseCache = global.__mongooseCache ?? { conn: null, promise: null };
+global.__mongooseCache = cached;
+
+export async function connectToDb(): Promise<typeof mongoose> {
+  // Return existing connection
+  if (cached.conn) {
+    return cached.conn;
   }
 
-  // Check if mongoose is already connected
-  if (mongoose.connection.readyState === 1) {
-    isConnected = true;
-    console.log("MongoDB already connected (readyState: 1)!");
-    return;
+  // Return in-flight connection promise
+  if (cached.promise) {
+    cached.conn = await cached.promise;
+    return cached.conn;
   }
 
   const MONGODB_URI = process.env.MONGODB_URI;
-
   if (!MONGODB_URI) {
-    throw new Error("MONGODB_URI is not defined in environment variables");
+    throw new Error(
+      "MONGODB_URI is not defined in environment variables. " +
+      "Add it to .env (see .env.example)."
+    );
   }
+
+  mongoose.set("strictQuery", true);
+
+  cached.promise = mongoose
+    .connect(MONGODB_URI, {
+      bufferCommands: false,
+    })
+    .then((m) => {
+      console.log("[DB] Connected to MongoDB");
+      return m;
+    });
 
   try {
-    // Set mongoose options for better stability
-    mongoose.set('strictQuery', true);
-    
-    // Connect without deprecated options
-    const db = await mongoose.connect(MONGODB_URI);
-
-    isConnected = db.connection.readyState === 1; // 1 means connected
-    console.log("Connected to MongoDB!");
-    
-    // Handle connection events
-    db.connection.on('error', (err) => {
-      console.error('MongoDB connection error:', err);
-      isConnected = false;
-    });
-    
-    db.connection.on('disconnected', () => {
-      console.log('MongoDB disconnected');
-      isConnected = false;
-    });
-    
+    cached.conn = await cached.promise;
   } catch (error) {
-    console.error("Failed to connect to MongoDB:", error);
-    isConnected = false;
-    throw error; // Throw error to handle it in API or middleware
+    cached.promise = null;
+    console.error("[DB] Connection failed:", error);
+    throw error;
   }
-};
+
+  return cached.conn;
+}

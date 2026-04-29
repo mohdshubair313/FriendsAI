@@ -1,26 +1,31 @@
 import { HTMLAttributes } from "react"
 import { twMerge } from "tailwind-merge"
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faPlus } from "@fortawesome/free-solid-svg-icons";
 
-const SectionBorder = (props: { borderTop?: boolean} & HTMLAttributes<HTMLDivElement>) => {
-  const {className, borderTop, children, ...otherprops} = props;
+const SectionBorder = (props: { borderTop?: boolean } & HTMLAttributes<HTMLDivElement>) => {
+  const { className, borderTop, children, ...otherProps } = props;
   return (
-    <div className={twMerge('border-l border-r -mx-12 border-gray-200/20 relative',
-      borderTop && 'border-t',
-      className)} {...otherprops} >
-        {borderTop && (
-          <>
-           <div className="absolute top-0 left-0 -translate-x-1/2 -translate-y-1/2">
-            <FontAwesomeIcon icon={faPlus} className="size-4 text-gray-200" />
-           </div>
-           <div className="absolute top-0 right-0 -translate-y-1/2 translate-x-1/2">
-           <FontAwesomeIcon icon={faPlus} className="size-4 text-gray-200" />
-           </div>
-          </>
-        )}
+    <div
+      className={twMerge(
+        'border-l border-r -mx-12 border-stone-800/30 relative',
+        borderTop && 'border-t border-stone-800/30',
+        className
+      )}
+      {...otherProps}
+    >
+      {borderTop && (
+        <>
+          <div className="absolute top-0 left-0 -translate-x-1/2 -translate-y-1/2 w-3 h-3">
+            <div className="w-full h-px bg-stone-700/60 absolute top-1/2" />
+            <div className="h-full w-px bg-stone-700/60 absolute left-1/2" />
+          </div>
+          <div className="absolute top-0 right-0 translate-x-1/2 -translate-y-1/2 w-3 h-3">
+            <div className="w-full h-px bg-stone-700/60 absolute top-1/2" />
+            <div className="h-full w-px bg-stone-700/60 absolute left-1/2" />
+          </div>
+        </>
+      )}
       {children}
-      </div>
+    </div>
   );
 }
 

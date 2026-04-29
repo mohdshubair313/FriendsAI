@@ -23,6 +23,8 @@ const config: Config = {
     extend: {
       fontFamily: {
         poppins: ["Poppins"],
+        geist: ["var(--font-geist)", "ui-sans-serif", "system-ui", "sans-serif"],
+        serif: ["var(--font-instrument-serif)", "ui-serif", "Georgia", "serif"],
       },
       container: {
         center: true,
@@ -66,12 +68,27 @@ const config: Config = {
         rotate: {
           to: { transform: "rotate(90deg)" },
         },
+        marquee: {
+          from: { transform: "translateX(0)" },
+          to: { transform: "translateX(-50%)" },
+        },
+        "fade-up": {
+          "0%": { opacity: "0", transform: "translateY(16px)" },
+          "100%": { opacity: "1", transform: "translateY(0)" },
+        },
+        "glow-pulse": {
+          "0%, 100%": { opacity: "0.6" },
+          "50%": { opacity: "1" },
+        },
       },
       animation: {
         "cursor-blink": "cursor-blink 1s step-start infinite",
         shimmer: "shimmer 2s linear infinite",
         flip: "flip 6s infinite steps(2, end)",
         rotate: "rotate 3s linear infinite both",
+        marquee: "marquee 28s linear infinite",
+        "fade-up": "fade-up 0.5s ease-out forwards",
+        "glow-pulse": "glow-pulse 3s ease-in-out infinite",
       },
       borderRadius: {
         lg: "var(--radius)",

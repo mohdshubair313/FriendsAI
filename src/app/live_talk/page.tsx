@@ -1,87 +1,115 @@
-// app/page.tsx
 "use client";
-import { useState, useCallback, useEffect } from 'react';
-import { useSession } from '@/context/SessionContext';
+
+export const dynamic = "force-dynamic";
+
+import { useState, useCallback, useEffect, useRef } from 'react';
+import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
-import CameraPreview from '@/components/CameraPreview';
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { useAppSelector } from "@/store/hooks";
+import LiveTalkOverlay from '@/components/chatComponents/LiveTalkOverlay';
+import LiveTalkTeaser from '@/components/chatComponents/LiveTalkTeaser';
+import { toast } from 'sonner';
+import { motion } from 'framer-motion';
+import { ShieldAlert, Zap } from 'lucide-react';
 
-// Helper function to create message components
-const HumanMessage = ({ text }: { text: string }) => (
-  <div className="flex gap-3 items-start">
-    <Avatar className="h-8 w-8">
-      <AvatarImage src="/avatars/human.png" alt="Human" />
-      <AvatarFallback>H</AvatarFallback>
-    </Avatar>
-    <div className="flex-1 space-y-2">
-      <div className="flex items-center gap-2">
-        <p className="text-sm font-medium text-zinc-900">You</p>
-      </div>
-      <div className="rounded-lg bg-zinc-100 px-3 py-2 text-sm text-zinc-800">
-        {text}
-      </div>
-    </div>
-  </div>
-);
-
-const GeminiMessage = ({ text }: { text: string }) => (
-  <div className="flex gap-3 items-start">
-    <Avatar className="h-8 w-8 bg-blue-600">
-      <AvatarImage src="/avatars/gemini.png" alt="Gemini" />
-      <AvatarFallback>AI</AvatarFallback>
-    </Avatar>
-    <div className="flex-1 space-y-2">
-      <div className="flex items-center gap-2">
-        <p className="text-sm font-medium text-zinc-900">Gemini</p>
-      </div>
-      <div className="rounded-lg bg-white border border-zinc-200 px-3 py-2 text-sm text-zinc-800">
-        {text}
-      </div>
-    </div>
-  </div>
-);
-
-export default function Home() {
-  const [messages, setMessages] = useState<{ type: 'human' | 'gemini', text: string }[]>([]);
-  const { data: session, status } = useSession();
+export default function LiveTalkPage() {
+  const { data: session, status: sessionStatus } = useSession();
+  const isPremium = useAppSelector((s) => s.premium.isPremium);
+  const premiumStatus = useAppSelector((s) => s.premium.status);
   const router = useRouter();
 
-  useEffect(() => {
-    if (status === "unauthenticated") {
-      router.push("/signin");
-    }
-  }, [status, router]);
+  const [isStreaming, setIsStreaming] = useState(true);
+  const [isModelSpeaking, setIsModelSpeaking] = useState(false);
+  const [audioLevel, setAudioLevel] = useState(0);
+  const [outputAudioLevel, setOutputAudioLevel] = useState(0);
+  const [isExiting, setIsExiting] = useState(false);
 
-  const handleTranscription = useCallback((transcription: string) => {
-    setMessages(prev => [...prev, { type: 'gemini', text: transcription }]);
+  // Entitlement Gate
+  useEffect(() => {
+    if (sessionStatus === "unauthenticated") {
+      router.push("/signin");
+      return;
+    }
+
+    if (premiumStatus === "success" && !isPremium) {
+      toast.error("LiveTalk is a Pro feature. Redirecting to Upgrade...");
+      setTimeout(() => router.push("/premium"), 2000);
+    }
+  }, [sessionStatus, isPremium, premiumStatus, router]);
+
+  const handleInterrupt = useCallback(async () => {
+    try {
+      await fetch("/api/voice/interrupt", { method: "POST" });
+      setIsModelSpeaking(false);
+      // No toast for auto-interrupt to keep it feeling natural
+    } catch (err) {
+      console.error("Failed to interrupt:", err);
+    }
   }, []);
 
-  if (status === "loading") return <div className='flex h-screen items-center justify-center text-white'>Loading...</div>;
+  // Auto-Interruption Logic: Sustained speech detection to avoid noise triggers
+  const speechFramesRef = useRef(0);
+  useEffect(() => {
+    const INTERRUPT_THRESHOLD = 30; // 30% audio level
+    const SUSTAINED_FRAMES = 3;      // Must be above threshold for 3 frames (~300ms)
+
+    if (isModelSpeaking && audioLevel > INTERRUPT_THRESHOLD) {
+      speechFramesRef.current += 1;
+      if (speechFramesRef.current >= SUSTAINED_FRAMES) {
+        handleInterrupt();
+        speechFramesRef.current = 0;
+      }
+    } else {
+      speechFramesRef.current = 0;
+    }
+  }, [audioLevel, isModelSpeaking, handleInterrupt]);
+
+  if (sessionStatus === "loading" || premiumStatus === "loading" || isExiting) {
+    return (
+      <div className='flex h-screen items-center justify-center bg-black overflow-hidden'>
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(99,102,241,0.05)_0%,transparent_70%)]" />
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="flex flex-col items-center gap-6 z-10"
+        >
+          <div className="relative">
+            <div className="size-16 rounded-full border-t-2 border-indigo-500 animate-spin" />
+            {isExiting && <div className="absolute inset-0 size-16 rounded-full border-r-2 border-red-500 animate-pulse" />}
+          </div>
+          <div className="flex flex-col items-center gap-1">
+            <span className="text-[10px] font-black uppercase tracking-[0.3em] text-indigo-400">
+              {isExiting ? "Neural Link Severing" : "Authenticating Neural Link"}
+            </span>
+            {isExiting && (
+              <motion.span 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="text-[8px] font-bold text-zinc-600 uppercase tracking-widest"
+              >
+                Redirecting to Billing Dashboard...
+              </motion.span>
+            )}
+          </div>
+        </motion.div>
+      </div>
+    );
+  }
+
+  // Teaser State for Non-Pro Users
+  if (premiumStatus === "success" && !isPremium) {
+    return <LiveTalkTeaser />;
+  }
 
   return (
-    <>
-      <h1 className="text-4xl font-bold text-zinc-800 p-8 pb-0">
-        Multimodal Live Chat
-      </h1>
-      <div className="flex gap-8 p-8">
-        <CameraPreview onTranscription={handleTranscription} />
-
-        <div className="w-[640px] bg-white">
-          <ScrollArea className="h-[540px] p-6">
-            <div className="space-y-6">
-              <GeminiMessage text="Hi! I'm Gemini. I can see and hear you. Let's chat!" />
-              {messages.map((message, index) => (
-                message.type === 'human' ? (
-                  <HumanMessage key={`msg-${index}`} text={message.text} />
-                ) : (
-                  <GeminiMessage key={`msg-${index}`} text={message.text} />
-                )
-              ))}
-            </div>
-          </ScrollArea>
-        </div>
-      </div>
-    </>
+    <LiveTalkOverlay 
+      isStreaming={isStreaming}
+      isModelSpeaking={isModelSpeaking}
+      audioLevel={audioLevel}
+      outputAudioLevel={outputAudioLevel}
+      onClose={() => router.push("/chat")}
+      onInterrupt={handleInterrupt}
+      emotion="calm"
+    />
   );
 }
