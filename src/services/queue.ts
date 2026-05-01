@@ -7,8 +7,33 @@ let _redisConnection: Redis | null = null;
 export function getRedisConnection() {
   if (!_redisConnection) {
     _redisConnection = new Redis(process.env.VALKEY_URL || "redis://localhost:6379", {
+      // BullMQ requires this for blocking commands on the worker side.
       maxRetriesPerRequest: null,
       enableReadyCheck: false,
+      // Don't hang forever when Redis isn't running locally — fail fast
+      // and let the caller (imageGenerationNode) catch + degrade.
+      connectTimeout: 5000,
+      // Cap reconnection attempts so a missing Redis doesn't queue
+      // infinite retries when an enqueue is made from a request handler.
+      retryStrategy(times) {
+        if (times > 3) return null; // stop retrying
+        return Math.min(times * 500, 2000);
+      },
+      // Surface connection errors instead of crashing the Node process.
+      lazyConnect: false,
+    });
+    _redisConnection.on("error", (err: any) => {
+      // Logged once per failure; intentionally don't throw — callers
+      // wrap their enqueue in a timeout and degrade gracefully.
+      if (err?.code === "ECONNREFUSED") {
+        // Throttle the spam: only warn the first time.
+        if (!(getRedisConnection as any)._warned) {
+          console.warn("[queue] Redis unreachable — image/notification queues will degrade.");
+          (getRedisConnection as any)._warned = true;
+        }
+        return;
+      }
+      console.error("[queue] Redis error:", err?.message || err);
     });
   }
   return _redisConnection;

@@ -20,6 +20,7 @@ import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
 import Logo from "@/components/Logo";
 import { cn } from "@/lib/utils";
+import { useAppSelector } from "@/store/hooks";
 
 const NAV_ITEMS = [
   { id: "chat", label: "Agent Chat", icon: MessageSquare, href: "/chat", color: "text-indigo-400" },
@@ -31,9 +32,9 @@ export default function Sidebar() {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const pathname = usePathname();
   const { data: session } = useSession();
-  
-  // Hypothetical premium check
-  const isPro = true; // For demo purposes, we'll assume Pro based on previous work
+  // Read the real premium status from the store so the badge in the
+  // profile card reflects the actual entitlement, not a hardcoded flag.
+  const isPro = useAppSelector((s) => s.premium.isPremium);
 
   return (
     <motion.aside
@@ -58,7 +59,7 @@ export default function Sidebar() {
                 exit={{ opacity: 0, x: -10 }}
                 className="text-lg font-bold tracking-tight text-white group-hover:text-indigo-400 transition-colors"
               >
-                Spherial AI
+                Friends AI
               </motion.span>
             )}
           </AnimatePresence>
@@ -133,16 +134,27 @@ export default function Sidebar() {
 
       {/* Footer: User Profile & Pro Badge */}
       <div className="mt-auto py-6 border-t border-white/5">
-        <Link 
-          href="/premium"
+        <Link
+          href="/profile"
+          title="View your profile"
           className={cn(
             "group flex items-center gap-3 p-3 rounded-xl transition-all overflow-hidden",
             isPro ? "bg-gradient-to-br from-indigo-500/20 to-purple-500/10 border border-indigo-500/20" : "hover:bg-white/5"
           )}
         >
-          <div className="size-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold shrink-0 shadow-lg shimmer">
-            {session?.user?.name?.[0] || "U"}
-          </div>
+          {session?.user?.image ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={session.user.image}
+              alt={session.user.name ?? "Profile"}
+              referrerPolicy="no-referrer"
+              className="size-10 rounded-full object-cover shrink-0 ring-1 ring-white/10 shadow-lg"
+            />
+          ) : (
+            <div className="size-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold shrink-0 shadow-lg ring-1 ring-white/10">
+              {session?.user?.name?.[0]?.toUpperCase() || session?.user?.email?.[0]?.toUpperCase() || "U"}
+            </div>
+          )}
           {!isCollapsed && (
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">

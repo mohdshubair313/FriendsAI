@@ -63,7 +63,7 @@ export default function LiveTalkTeaser() {
             
             <p className="text-zinc-500 text-sm font-medium leading-relaxed mb-8">
                Experience full-duplex conversational AI with a real-time multimodal avatar. 
-               Spherial Pro members get unlimited low-latency WebRTC sessions and emotional intelligence.
+               Friends AI Pro members get unlimited low-latency WebRTC sessions and emotional intelligence.
             </p>
 
             <div className="space-y-3">

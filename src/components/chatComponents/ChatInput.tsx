@@ -18,6 +18,8 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { MOODS } from "@/app/chat/page";
 import { cn } from "@/lib/utils";
+import { useAppDispatch } from "@/store/hooks";
+import { clearMood } from "@/store/slices/chatSlice";
 
 type ChatInputProps = {
   input: string;
@@ -27,6 +29,8 @@ type ChatInputProps = {
   isLoading?: boolean;
   isPremium?: boolean;
   onVoiceClick?: () => void;
+  /** Called when the user clicks the Stop button while a response is streaming. */
+  onStop?: () => void;
   selectedMood?: string;
 };
 
@@ -38,8 +42,10 @@ export default function ChatInput({
   isLoading = false,
   isPremium = false,
   onVoiceClick,
-  selectedMood = "friendly",
+  onStop,
+  selectedMood,
 }: ChatInputProps) {
+  const dispatch = useAppDispatch();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isFocused, setIsFocused] = useState(false);
@@ -102,7 +108,8 @@ export default function ChatInput({
     });
   };
 
-  const activeMood = MOODS.find((m) => m.id === selectedMood);
+  const activeMood = selectedMood ? MOODS.find((m) => m.id === selectedMood) : null;
+  const moodIsAuto = !selectedMood;
 
   // Detect if user is typing an image prompt
   useEffect(() => {
@@ -115,7 +122,7 @@ export default function ChatInput({
   }, [input]);
 
   return (
-    <div className="w-full max-w-4xl mx-auto px-6 pb-8 relative z-20">
+    <div className="w-full max-w-3xl mx-auto px-4 md:px-6 pb-4 pt-1 relative z-20">
       <motion.div
         layoutId="omni-input"
         className={cn(
@@ -182,10 +189,32 @@ export default function ChatInput({
                 {isImageGenMode ? <Sparkles className="size-3 animate-pulse" /> : <Zap className="size-3" />}
                 {isImageGenMode ? "Image Synthesis Active" : "Multimodal Orchestration"}
               </motion.div>
-              <div className="flex items-center gap-1.5">
-                <span className="size-1 rounded-full bg-zinc-700" />
-                <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-[0.2em]">{activeMood?.label} Mode</span>
-              </div>
+              <button
+                type="button"
+                onClick={() => activeMood && dispatch(clearMood())}
+                title={
+                  moodIsAuto
+                    ? "AI is adapting tone to your message. Pick a chip above to override."
+                    : `Locked to ${activeMood?.label}. Click to switch back to Auto.`
+                }
+                className={cn(
+                  "flex items-center gap-1.5 rounded-full px-2 py-0.5 transition-all border",
+                  moodIsAuto
+                    ? "border-indigo-500/30 bg-indigo-500/10 text-indigo-300 cursor-default"
+                    : "border-amber-500/40 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20"
+                )}
+              >
+                <span
+                  className={cn(
+                    "size-1 rounded-full",
+                    moodIsAuto ? "bg-indigo-400 animate-pulse" : "bg-amber-400"
+                  )}
+                />
+                <span className="text-[9px] font-bold uppercase tracking-[0.2em]">
+                  {moodIsAuto ? "Auto · Adaptive" : `User · ${activeMood?.label}`}
+                </span>
+                {!moodIsAuto && <X className="size-2.5 opacity-70" />}
+              </button>
             </div>
             
             <div className="flex items-center gap-4">
@@ -245,7 +274,7 @@ export default function ChatInput({
                 onKeyDown={handleKeyDown}
                 onFocus={() => setIsFocused(true)}
                 onBlur={() => setIsFocused(false)}
-                placeholder={isImageGenMode ? "Describe the vision you want to generate..." : "Ask Spherial anything multimodal..."}
+                placeholder={isImageGenMode ? "Describe the image you'd like to create…" : "Ask Friends AI anything…"}
                 rows={1}
                 maxLength={MAX_CHARS}
                 disabled={disabled}
@@ -304,12 +333,15 @@ export default function ChatInput({
                 )}
 
                 <button
-                  type="submit"
+                  type={isLoading ? "button" : "submit"}
+                  onClick={isLoading ? onStop : undefined}
                   disabled={disabled || (!input.trim() && attachments.length === 0 && !isLoading)}
+                  title={isLoading ? "Stop generating" : "Send"}
+                  aria-label={isLoading ? "Stop generating" : "Send message"}
                   className={cn(
                     "p-2.5 rounded-2xl transition-all duration-300 shadow-2xl",
                     isLoading
-                      ? "bg-red-500/20 text-red-400 border border-red-500/30"
+                      ? "bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30 hover:text-red-300 cursor-pointer"
                       : (input.trim() || attachments.length > 0)
                       ? isImageGenMode ? "bg-purple-600 text-white border-purple-400 shadow-purple-500/40 scale-105" : "bg-indigo-600 text-white border border-indigo-400 shadow-indigo-500/40 scale-105"
                       : "bg-zinc-900 text-zinc-700 border border-white/5 cursor-not-allowed"

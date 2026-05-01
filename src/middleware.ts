@@ -6,7 +6,7 @@ import type { NextRequest } from "next/server";
  * Protected route prefixes — unauthenticated users
  * are redirected to /signin with a callbackUrl.
  */
-const PROTECTED_PREFIXES = ["/chat", "/premium", "/live_talk", "/settings"];
+const PROTECTED_PREFIXES = ["/chat", "/premium", "/live_talk", "/settings", "/profile"];
 
 /**
  * API routes that require authentication.
@@ -18,6 +18,7 @@ const PROTECTED_API_PREFIXES = [
   "/api/create-order",
   "/api/verify-payment",
   "/api/check-subscription",
+  "/api/profile",
 ];
 
 export default async function middleware(request: NextRequest) {
@@ -53,11 +54,13 @@ export const config = {
     "/premium/:path*",
     "/live_talk/:path*",
     "/settings/:path*",
+    "/profile/:path*",
     "/api/orchestrate/:path*",
     "/api/voice/:path*",
     "/api/media/:path*",
     "/api/create-order/:path*",
     "/api/verify-payment/:path*",
     "/api/check-subscription/:path*",
+    "/api/profile/:path*",
   ],
 };

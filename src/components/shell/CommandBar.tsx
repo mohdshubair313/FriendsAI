@@ -126,7 +126,7 @@ export default function CommandBar() {
                     <kbd className="px-1 py-0.5 rounded bg-white/5 border border-white/10 font-bold font-sans">Tab</kbd> <span className="font-bold">Navigate</span>
                   </div>
                 </div>
-                <span className="text-[10px] font-bold text-indigo-400">Spherial Intelligence v2.0</span>
+                <span className="text-[10px] font-bold text-indigo-400">Friends AI v2.0</span>
               </div>
             </motion.div>
           </div>

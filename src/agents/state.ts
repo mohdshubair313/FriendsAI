@@ -10,9 +10,22 @@ export const GraphState = Annotation.Root({
     reducer: (curr, update) => update,
     default: () => "safety",
   }),
-  mood: Annotation<string>({
+  /**
+   * `mood` is the **user-selected** mood (from the MoodChips UI).
+   * `null` means the user did not pick — the response should adapt to
+   * `detectedMood` instead, which the sentimentNode fills in.
+   */
+  mood: Annotation<string | null>({
     reducer: (curr, update) => update,
-    default: () => "friendly",
+    default: () => null,
+  }),
+  /**
+   * Mood inferred by the sentimentNode from the latest message.
+   * Used as a fallback when `mood` is null.
+   */
+  detectedMood: Annotation<string | null>({
+    reducer: (curr, update) => update ?? curr,
+    default: () => null,
   }),
   premium: Annotation<boolean>({
     reducer: (curr, update) => update,

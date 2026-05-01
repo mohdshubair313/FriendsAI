@@ -1,9 +1,11 @@
 import { StateGraph, START, END, MemorySaver } from "@langchain/langgraph";
 import { GraphState, State } from "./state";
-import { safetyNode } from "./specialists/safetyNode";
-import { intentNode } from "./specialists/intentNode";
+import { preprocessNode } from "./specialists/preprocessNode";
 import { sentimentNode } from "./specialists/sentimentNode";
-import { personaNode } from "./specialists/personaNode";
+// personaNode was removed: identity instructions are inlined into
+// buddyAgent's system prompt to avoid double-injection and the
+// `[...state.messages, personaContext]` doubling caused by the
+// concat-reducer on `messages`.
 import { supervisorNode } from "./supervisor";
 import { entitlementGateNode } from "./specialists/entitlementGateNode";
 import { buddyAgent } from "./specialists/buddyAgent";
@@ -13,9 +15,9 @@ import { avatarSessionNode } from "./specialists/avatarSessionNode";
 import { recommendationNode } from "./specialists/recommendationNode";
 import { persistenceNode } from "./specialists/persistenceNode";
 
-function routeFromSafety(state: State): "intentDetector" | "__end__" {
+function routeFromPreprocess(state: State): "sentimentAnalyzer" | "__end__" {
   if (!state.isSafe) return "__end__";
-  return "intentDetector";
+  return "sentimentAnalyzer";
 }
 
 function routeFromEntitlement(state: State): "buddy" | "imageGeneration" | "voice" | "avatarSession" | "recommendation" | "__end__" {
@@ -34,16 +36,14 @@ function routeFromAgent(state: State): "persistence" | "supervisor" {
 
 export function createAgentGraph() {
   const workflow = new StateGraph(GraphState)
-    // 1. Intelligence preprocessing
-    .addNode("safety", safetyNode)
-    .addNode("intentDetector", intentNode)
+    // 1. Intelligence preprocessing — safety + intent in parallel
+    .addNode("preprocess", preprocessNode)
     .addNode("sentimentAnalyzer", sentimentNode)
-    .addNode("personaInjector", personaNode)
-    
+
     // 2. Routing & Action
     .addNode("supervisor", supervisorNode)
     .addNode("entitlementGate", entitlementGateNode)
-    
+
     // Action Nodes
     .addNode("buddy", buddyAgent)
     .addNode("imageGeneration", imageGenerationNode)
@@ -54,18 +54,16 @@ export function createAgentGraph() {
     // 3. Post-processing
     .addNode("persistence", persistenceNode)
 
-    // Flow: START -> Safety
-    .addEdge(START, "safety")
-    
-    // Safety -> conditional routing
-    .addConditionalEdges("safety", routeFromSafety, {
-      "intentDetector": "intentDetector",
+    // Flow: START -> Preprocess (safety+intent in parallel)
+    .addEdge(START, "preprocess")
+
+    // Preprocess -> conditional routing on safety result
+    .addConditionalEdges("preprocess", routeFromPreprocess, {
+      "sentimentAnalyzer": "sentimentAnalyzer",
       "__end__": END,
     })
-    
-    .addEdge("intentDetector", "sentimentAnalyzer")
-    .addEdge("sentimentAnalyzer", "personaInjector")
-    .addEdge("personaInjector", "supervisor")
+
+    .addEdge("sentimentAnalyzer", "supervisor")
     .addEdge("supervisor", "entitlementGate")
 
     // EntitlementGate -> conditional routing with path_map

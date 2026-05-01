@@ -1,56 +1,107 @@
+# Friends AI — local stack
+#
+# Usage:
+#   docker compose up -d --build       # build images + run all 4 services
+#   docker compose logs -f app worker  # tail app + worker logs
+#   docker compose down                # stop (keep data volumes)
+#   docker compose down -v             # stop + wipe mongo/valkey data
+#
+# The .env file (next to this compose file) is read for AI provider keys,
+# OAuth secrets, etc. — see .env.example for the full list.
+
 services:
   app:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: spherial-ai-app
+    container_name: friends-ai-app
     ports:
       - "3000:3000"
     environment:
-      - NODE_ENV=production
-      - VALKEY_URL=redis://valkey:6379
-      - MONGODB_URI=mongodb://mongodb:27017/spherial-ai
+      NODE_ENV: production
+      # Override .env values so the app reaches the in-network services,
+      # not localhost (which would point inside the container).
+      VALKEY_URL: redis://valkey:6379
+      MONGODB_URI: mongodb://mongodb:27017/friends-ai
+      NEXTAUTH_URL: http://localhost:3000
     env_file:
       - .env
     depends_on:
-      - valkey
-      - mongodb
-    restart: always
+      valkey:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - friends-net
 
   worker:
     build:
       context: .
       dockerfile: Dockerfile.worker
-    container_name: spherial-ai-worker
+    container_name: friends-ai-worker
     environment:
-      - NODE_ENV=production
-      - VALKEY_URL=redis://valkey:6379
-      - MONGODB_URI=mongodb://mongodb:27017/spherial-ai
+      NODE_ENV: production
+      VALKEY_URL: redis://valkey:6379
+      MONGODB_URI: mongodb://mongodb:27017/friends-ai
     env_file:
       - .env
     depends_on:
-      - valkey
-      - mongodb
-    restart: always
+      valkey:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - friends-net
 
   valkey:
-    image: valkey/valkey:latest
-    container_name: spherial-ai-valkey
+    # Drop-in Redis-compatible store. Official image on Docker Hub
+    # (valkey/valkey). 8-alpine is ~30MB and stable.
+    # The image's ENTRYPOINT already runs `valkey-server`, so the
+    # `command:` here is just extra args appended to it.
+    image: valkey/valkey:8-alpine
+    container_name: friends-ai-valkey
     ports:
+      # Exposed on the host so `npm run dev` (outside Docker) can also
+      # use the same Valkey instance.
       - "6379:6379"
     volumes:
       - valkey_data:/data
-    restart: always
+    command: ["--save", "60", "1", "--loglevel", "warning"]
+    healthcheck:
+      # `valkey-cli ping` returns "PONG" with exit code 0 once ready.
+      # Wrapped through sh -c so PATH lookup works on alpine.
+      test: ["CMD-SHELL", "valkey-cli ping | grep -q PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - friends-net
 
   mongodb:
-    image: mongo:latest
-    container_name: spherial-ai-mongodb
+    image: mongo:7
+    container_name: friends-ai-mongodb
     ports:
       - "27017:27017"
     volumes:
       - mongodb_data:/data/db
-    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet --eval \"db.adminCommand('ping').ok\" | grep -q 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - friends-net
 
 volumes:
   valkey_data:
   mongodb_data:
+
+networks:
+  friends-net:
+    driver: bridge

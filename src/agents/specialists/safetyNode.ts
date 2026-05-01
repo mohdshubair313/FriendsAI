@@ -6,7 +6,10 @@ import { routeModel, getProviderApiKey } from "@/services/providers/registry";
 
 const SafetySchema = z.object({
   isSafe: z.boolean().describe("True if safe"),
-  reason: z.string().optional().describe("Reason if unsafe"),
+  // OpenAI strict structured-outputs requires every field to be required.
+  // `.optional()` alone is rejected — use `.nullable()` so the model can
+  // still omit a reason by emitting `null`.
+  reason: z.string().nullable().describe("Reason if unsafe, otherwise null"),
 });
 
 export async function safetyNode(state: State, config?: any) {

@@ -62,8 +62,8 @@ export default function EmptyState({ onSelect, selectedMood = "friendly" }: Empt
           {activeMood ? `${activeMood.label} Core Active` : "Neural Interface Online"}
         </h2>
         <p className="text-zinc-500 text-sm max-w-md mx-auto font-medium leading-relaxed">
-          Spherial Intelligence has initialized in <span className="text-indigo-400 font-bold">{activeMood?.label}</span> mode. 
-          Ready to orchestrate your next breakthrough.
+          Friends AI is online{activeMood ? <> in <span className="text-indigo-400 font-bold">{activeMood.label}</span> mode</> : null}.
+          Ready when you are.
         </p>
       </motion.div>
 

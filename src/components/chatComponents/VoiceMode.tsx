@@ -52,6 +52,10 @@ export default function VoiceMode({
     const [transcript, setTranscript] = useState("");
     const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
     const synthRef = useRef<SpeechSynthesis | null>(null);
+    // Track which assistant message we already spoke. Without this, the
+    // streaming runner triggers `lastMessage` updates on every token, so
+    // SpeechSynthesis would queue 50+ partial utterances per reply.
+    const lastSpokenRef = useRef<string>("");
 
     // Initialize Speech Recognition and Synthesis
     useEffect(() => {
@@ -94,20 +98,50 @@ export default function VoiceMode({
         }
     }, [onSendMessage]);
 
-    // Handle Text-to-Speech for AI responses
+    // Handle Text-to-Speech for AI responses.
+    //
+    // Fires only when:
+    //   • the assistant has finished streaming (`!isProcessing`),
+    //   • there is text to speak,
+    //   • we haven't already spoken this exact text.
+    //
+    // The third check is the important one: streaming updates `lastMessage`
+    // on every token, so without de-duping we'd queue dozens of partial
+    // utterances per reply.
     useEffect(() => {
-        if (lastMessage && synthRef.current && !isProcessing) {
-            const utterance = new SpeechSynthesisUtterance(lastMessage);
-            // Try to select a good voice
-            const voices = synthRef.current.getVoices();
-            const preferredVoice = voices.find(v => v.name.includes("Google US English") || v.name.includes("Samantha"));
-            if (preferredVoice) utterance.voice = preferredVoice;
+        if (!lastMessage || !synthRef.current || isProcessing) return;
+        if (lastSpokenRef.current === lastMessage) return;
+        lastSpokenRef.current = lastMessage;
 
-            utterance.rate = 1;
-            utterance.pitch = 1;
-            synthRef.current.speak(utterance);
-        }
+        synthRef.current.cancel();
+
+        // Strip markdown so the voice doesn't read "asterisk asterisk".
+        const spoken = lastMessage
+            .replace(/```[\s\S]*?```/g, " ")
+            .replace(/`([^`]+)`/g, "$1")
+            .replace(/[*_#>]/g, "")
+            .replace(/\[(.*?)\]\([^)]*\)/g, "$1")
+            .replace(/\s{2,}/g, " ")
+            .trim();
+        if (!spoken) return;
+
+        const utterance = new SpeechSynthesisUtterance(spoken);
+        const voices = synthRef.current.getVoices();
+        const preferredVoice = voices.find(
+            (v) => v.name.includes("Google US English") || v.name.includes("Samantha") || v.lang === "en-US"
+        );
+        if (preferredVoice) utterance.voice = preferredVoice;
+        utterance.rate = 1;
+        utterance.pitch = 1;
+        synthRef.current.speak(utterance);
     }, [lastMessage, isProcessing]);
+
+    // Stop any in-flight speech when the modal closes.
+    useEffect(() => {
+        return () => {
+            if (typeof window !== "undefined") window.speechSynthesis?.cancel();
+        };
+    }, []);
 
     const toggleListening = () => {
         if (isListening) {

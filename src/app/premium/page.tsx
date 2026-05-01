@@ -60,7 +60,7 @@ export default function PremiumPage() {
           key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
           amount: data.amount,
           currency: data.currency,
-          name: "Spherial AI Pro",
+          name: "Friends AI Pro",
           description: "Unlock Multimodal Agentic Intelligence",
           order_id: data.orderId,
           handler: async function (response: any) {
@@ -112,7 +112,7 @@ export default function PremiumPage() {
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-500">is Pro.</span>
             </h1>
             <p className="mt-6 text-zinc-500 text-lg font-medium leading-relaxed">
-              Experience Spherial AI without limits. Access the full orchestration engine, 
+              Experience Friends AI without limits. Access the full orchestration engine,
               real-time digital avatars, and high-fidelity media generation.
             </p>
           </motion.div>

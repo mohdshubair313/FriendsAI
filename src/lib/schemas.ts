@@ -52,8 +52,11 @@ export const generateSchema = z.object({
   messages: z.array(z.any())
     .min(1, "At least one message required")
     .max(50, "Maximum 50 messages per request"),
-  mood: z.string().optional().default("friendly"),
-  conversationId: z.string().optional(),
+  // null/omitted = auto-detect on the server; string = user explicit pick
+  mood: z.string().nullable().optional(),
+  // null/omitted on the very first turn → route mints a Conversation
+  // and returns the id via SSE for the client to reuse.
+  conversationId: z.string().nullable().optional(),
 });
 
 // ─── Payment Schemas ─────────────────────────────────────────────────────────

@@ -81,7 +81,7 @@ export default function LiveTalkOverlay({
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-xl font-black tracking-tighter text-white uppercase italic">Spherial LiveTalk</h1>
+              <h1 className="text-xl font-black tracking-tighter text-white uppercase italic">Friends LiveTalk</h1>
               <span className="px-2 py-0.5 rounded-full bg-indigo-500 text-[10px] font-black uppercase text-white animate-pulse">PRO LIVE</span>
             </div>
             <div className="flex items-center gap-2 mt-0.5">
