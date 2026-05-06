@@ -5,7 +5,22 @@
       "Bash(npx tsc *)",
       "Bash(npm install *)",
       "Bash(node *)",
-      "Bash(npx next *)"
+      "Bash(npx next *)",
+      "Bash(grep *)",
+      "Bash(echo \"EXIT: $?\")",
+      "Read(//tmp/**)",
+      "Bash(python -c \"import sys, json; pkg=json.load\\(sys.stdin\\); print\\('SCRIPTS:'\\); [print\\(' ', k, '→', v\\) for k, v in pkg.get\\('scripts', {}\\).items\\(\\)]\")",
+      "Bash(npm run *)",
+      "Bash(npx eslint *)",
+      "Bash(echo \"TSC EXIT: $?\")",
+      "WebFetch(domain:docs.agents.lumalabs.ai)",
+      "WebFetch(domain:developers.cloudflare.com)",
+      "Bash(rm -f src/worker.ts src/services/queue.ts src/services/observability.ts)",
+      "Bash(rm -rf src/agents src/app/api/orchestrate/status src/app/api/media)",
+      "Bash(echo \"LINT EXIT: $?\")",
+      "WebSearch",
+      "WebFetch(domain:openrouter.ai)",
+      "Bash(echo \"BUILD EXIT: $?\")"
     ]
   }
 }

@@ -8,7 +8,7 @@ import { Bot } from "lucide-react";
 interface Message {
   role: "user" | "assistant" | "system";
   content: string;
-  annotations?: any[];
+  annotations?: Array<{ type: string; data: unknown }>;
 }
 
 interface MessageListProps {
@@ -16,11 +16,13 @@ interface MessageListProps {
   isLoading?: boolean;
   /**
    * Pipeline mode reported by the orchestrate route via the `start` SSE
-   * event. `"fast"` (greetings/small talk) returns the first token in
-   * ~1 s, so a typing pulse adds no value. `"graph"` runs the full
-   * pre-processing chain — show the pulse until the first token lands.
+   * event:
+   *   - "chat":  direct LLM stream — show the typing pulse until the
+   *              first token lands (usually < 2s).
+   *   - "image": image-gen flow — the assistant slot already shows its
+   *              own placeholder ("🎨 Queued…"), so suppress the pulse.
    */
-  mode?: "fast" | "graph" | null;
+  mode?: "chat" | "image" | null;
 }
 
 export default function MessageList({ messages, isLoading, mode }: MessageListProps) {
@@ -31,13 +33,11 @@ export default function MessageList({ messages, isLoading, mode }: MessageListPr
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isLoading]);
 
-  // Show the thinking pulse only while:
-  //   - we're in the slow (graph) path,
-  //   - and the assistant placeholder is empty (no tokens yet).
+  // Pulse only for the chat path while the assistant slot is still empty.
   const lastMsg = messages[messages.length - 1];
   const showThinking =
     !!isLoading &&
-    mode === "graph" &&
+    mode === "chat" &&
     lastMsg?.role === "assistant" &&
     !lastMsg.content;
 

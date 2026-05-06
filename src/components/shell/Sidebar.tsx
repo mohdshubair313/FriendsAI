@@ -1,26 +1,25 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { 
-  MessageSquare, 
-  Image as ImageIcon, 
-  Video, 
-  Settings, 
-  History, 
-  ChevronLeft, 
+import {
+  MessageSquare,
+  Image as ImageIcon,
+  Video,
+  ChevronLeft,
   ChevronRight,
   Plus,
-  Sparkles,
   Zap,
-  LayoutDashboard
+  History,
+  Loader2,
 } from "lucide-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import Logo from "@/components/Logo";
 import { cn } from "@/lib/utils";
 import { useAppSelector } from "@/store/hooks";
+import { useConversations, ConversationListItem } from "@/lib/hooks/useConversations";
 
 const NAV_ITEMS = [
   { id: "chat", label: "Agent Chat", icon: MessageSquare, href: "/chat", color: "text-indigo-400" },
@@ -30,11 +29,25 @@ const NAV_ITEMS = [
 
 export default function Sidebar() {
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const router = useRouter();
   const pathname = usePathname();
-  const { data: session } = useSession();
-  // Read the real premium status from the store so the badge in the
-  // profile card reflects the actual entitlement, not a hardcoded flag.
+  const searchParams = useSearchParams();
+  const { data: session, status: sessionStatus } = useSession();
   const isPro = useAppSelector((s) => s.premium.isPremium);
+
+  // Real conversation list — replaces the previous hard-coded mock items.
+  // Refetches automatically when any chat-side code dispatches the
+  // `conversations:invalidate` window event.
+  const { conversations, loading: conversationsLoading } = useConversations();
+
+  // ?c=… on /chat tells us which conversation to highlight in the list.
+  const activeConversationId =
+    pathname === "/chat" ? searchParams.get("c") : null;
+
+  // "New conversation" button: navigate to /chat without a `c` query.
+  const handleNewSession = () => {
+    router.push("/chat");
+  };
 
   return (
     <motion.aside
@@ -66,14 +79,17 @@ export default function Sidebar() {
         </Link>
       </div>
 
-      {/* Action: New Session */}
+      {/* Action: New Conversation */}
       <div className="mt-4 mb-8">
-        <button className={cn(
-          "w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-medium transition-all shadow-lg shadow-indigo-500/20 active:scale-95",
-          isCollapsed ? "px-0" : "px-4"
-        )}>
+        <button
+          onClick={handleNewSession}
+          className={cn(
+            "w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-medium transition-all shadow-lg shadow-indigo-500/20 active:scale-95",
+            isCollapsed ? "px-0" : "px-4"
+          )}
+        >
           <Plus className="size-5" />
-          {!isCollapsed && <span>New Session</span>}
+          {!isCollapsed && <span>New Conversation</span>}
         </button>
       </div>
 
@@ -90,8 +106,8 @@ export default function Sidebar() {
               href={item.href}
               className={cn(
                 "group flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all relative",
-                isActive 
-                  ? "bg-white/10 text-white" 
+                isActive
+                  ? "bg-white/10 text-white"
                   : "text-zinc-400 hover:text-white hover:bg-white/5"
               )}
             >
@@ -113,22 +129,13 @@ export default function Sidebar() {
           <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest px-3 mb-2">
             {!isCollapsed ? "Recent Activity" : "Recents"}
           </div>
-          {/* Session Clusters (Mocked) */}
-          <div className="space-y-1">
-            {[
-              { label: "Product Strategy AI", type: "chat" },
-              { label: "Futuristic Cityscapes", type: "images" },
-              { label: "Expert Consultant", type: "livetalk" }
-            ].map((session, i) => (
-              <button
-                key={i}
-                className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-zinc-500 hover:text-zinc-300 hover:bg-white/5 transition-all text-left truncate"
-              >
-                <History className="size-4 shrink-0" />
-                {!isCollapsed && <span className="text-xs truncate">{session.label}</span>}
-              </button>
-            ))}
-          </div>
+          <RecentConversations
+            collapsed={isCollapsed}
+            loading={conversationsLoading}
+            authenticated={sessionStatus === "authenticated"}
+            conversations={conversations}
+            activeId={activeConversationId}
+          />
         </div>
       </nav>
 
@@ -180,5 +187,79 @@ export default function Sidebar() {
         {isCollapsed ? <ChevronRight className="size-4" /> : <ChevronLeft className="size-4" />}
       </button>
     </motion.aside>
+  );
+}
+
+// ─── Recent Conversations sub-component ──────────────────────────────────────
+
+interface RecentConversationsProps {
+  collapsed: boolean;
+  loading: boolean;
+  authenticated: boolean;
+  conversations: ConversationListItem[];
+  activeId: string | null;
+}
+
+function RecentConversations({
+  collapsed,
+  loading,
+  authenticated,
+  conversations,
+  activeId,
+}: RecentConversationsProps) {
+  if (!authenticated) {
+    return collapsed ? null : (
+      <p className="px-3 text-[11px] text-zinc-500 leading-relaxed">
+        Sign in to see your conversation history.
+      </p>
+    );
+  }
+
+  if (loading && conversations.length === 0) {
+    return (
+      <div className="flex items-center gap-2 px-3 py-2 text-zinc-500">
+        <Loader2 className="size-3.5 animate-spin shrink-0" />
+        {!collapsed && <span className="text-xs">Loading…</span>}
+      </div>
+    );
+  }
+
+  if (conversations.length === 0) {
+    return collapsed ? null : (
+      <p className="px-3 text-[11px] text-zinc-500 leading-relaxed">
+        Your conversations will appear here once you start chatting.
+      </p>
+    );
+  }
+
+  return (
+    <div className="space-y-1">
+      {conversations.map((c) => {
+        const isActive = c.id === activeId;
+        return (
+          <Link
+            key={c.id}
+            href={`/chat?c=${c.id}`}
+            title={c.title}
+            className={cn(
+              "group flex items-center gap-3 px-3 py-2 rounded-lg transition-all text-left truncate",
+              isActive
+                ? "bg-indigo-500/15 text-white border border-indigo-500/20"
+                : "text-zinc-400 hover:text-zinc-100 hover:bg-white/5 border border-transparent"
+            )}
+          >
+            <History
+              className={cn(
+                "size-4 shrink-0 transition-colors",
+                isActive ? "text-indigo-300" : "text-zinc-500 group-hover:text-zinc-300"
+              )}
+            />
+            {!collapsed && (
+              <span className="text-xs truncate font-medium">{c.title}</span>
+            )}
+          </Link>
+        );
+      })}
+    </div>
   );
 }

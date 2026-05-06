@@ -2,13 +2,9 @@
 export const dynamic = "force-dynamic";
 
 import ClientHomepage from "./ClientHomepage";
-import { SessionProvider } from "@/context/SessionContext";
 
+// SessionProvider is mounted once at the root layout — no need to nest it
+// here. (Doing so would cause double session polling.)
 export default async function Home() {
-
-    return (
-      <SessionProvider>
-        <ClientHomepage />
-      </SessionProvider>
-    );
+  return <ClientHomepage />;
 }

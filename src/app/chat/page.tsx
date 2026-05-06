@@ -2,9 +2,11 @@
 
 export const dynamic = "force-dynamic";
 
-import { useEffect, useCallback, useState, useRef } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { Suspense, useEffect, useCallback, useState, useRef } from "react";
+import { AnimatePresence } from "framer-motion";
 import { useSession } from "next-auth/react";
+import { useSearchParams } from "next/navigation";
+import { Loader2 } from "lucide-react";
 
 import ChatNavbar from "@/components/chatComponents/ChatNavbar";
 import ChatInput from "@/components/chatComponents/ChatInput";
@@ -27,9 +29,51 @@ export const MOODS = [
   { id: "angry",         label: "Calm me down",    emoji: "😤" },
 ];
 
-type ChatMsg = { role: "user" | "assistant" | "system"; content: string };
+type ChatMsg = {
+  role: "user" | "assistant" | "system";
+  content: string;
+};
 
-export default function ChatPage() {
+/**
+ * SSE event types emitted by /api/orchestrate.
+ * Mirror of the writer types in route.ts — kept narrow so unhandled events
+ * are caught at the switch statement.
+ */
+type SseEvent =
+  | { type: "start"; mode?: "chat" | "image" }
+  | { type: "conversation"; id: string }
+  | { type: "token"; content: string }
+  | { type: "image_progress"; phase: "generating" | "uploading" }
+  | { type: "image_done"; url: string; prompt: string }
+  | { type: "image_failed"; error: string }
+  | { type: "aborted" }
+  | { type: "error"; content?: string }
+  | { type: "done" };
+
+/**
+ * Stored Message shape returned by /api/conversations/[id]/messages.
+ * Keep parsing tolerant — older rows may lack imageUrl.
+ */
+type StoredMessage = {
+  id: string;
+  role: "user" | "assistant" | "tool" | "system";
+  content: string;
+  imageUrl: string | null;
+  createdAt: string;
+};
+
+/**
+ * Custom event fired whenever the conversation list might be stale —
+ * the sidebar listens for this and refetches /api/conversations.
+ *   - On new conversation mint
+ *   - After every assistant reply finishes
+ */
+function dispatchConversationsInvalidate() {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent("conversations:invalidate"));
+}
+
+function ChatPageInner() {
   const [isVoiceModeOpen, setIsVoiceModeOpen] = useState(false);
   const [input, setInput] = useState("");
 
@@ -47,21 +91,86 @@ export default function ChatPage() {
 
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [streamMode, setStreamMode] = useState<"fast" | "graph" | null>(null);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  // `streamMode` powers MessageList's "Thinking…" pulse.
+  // For "image" mode the assistant slot shows its own progress text, so
+  // the pulse is suppressed.
+  const [streamMode, setStreamMode] = useState<"chat" | "image" | null>(null);
   const abortRef = useRef<AbortController | null>(null);
-  // Conversation id is minted server-side on the first turn and reused
-  // for the rest of the session so /image and persistence flows can
-  // attach to a real document.
   const conversationIdRef = useRef<string | null>(null);
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  // Source of truth for "which conversation are we viewing?" — the URL.
+  // /chat        → fresh new conversation
+  // /chat?c=ID  → load and resume conversation ID
+  const searchParams = useSearchParams();
+  const conversationIdFromUrl = searchParams.get("c");
+
+  // ─── Load history when ?c=ID changes ──────────────────────────────────
+  useEffect(() => {
+    if (!conversationIdFromUrl) {
+      // Switched to a fresh /chat — wipe the slate.
+      setMessages([]);
+      setHistoryError(null);
+      conversationIdRef.current = null;
+      return;
+    }
+
+    let cancelled = false;
+    setIsLoadingHistory(true);
+    setHistoryError(null);
+    conversationIdRef.current = conversationIdFromUrl;
+
+    fetch(`/api/conversations/${conversationIdFromUrl}/messages`, {
+      cache: "no-store",
+    })
+      .then(async (r) => {
+        if (!r.ok) {
+          throw new Error(`HTTP ${r.status}`);
+        }
+        return r.json() as Promise<{ messages: StoredMessage[] }>;
+      })
+      .then(({ messages: stored }) => {
+        if (cancelled) return;
+        const formatted: ChatMsg[] = stored
+          .filter((m) => m.role === "user" || m.role === "assistant")
+          .map((m) => ({
+            role: m.role as "user" | "assistant",
+            // Inline the image URL into the markdown body so MessageBubble's
+            // existing markdown renderer picks it up — same shape that
+            // live image generations emit.
+            content: m.imageUrl
+              ? `${m.content}\n\n![image](${m.imageUrl})`
+              : m.content,
+          }));
+        setMessages(formatted);
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        console.error("[chat] history load failed:", err);
+        setHistoryError(
+          (err as { message?: string })?.message?.includes("404")
+            ? "This conversation no longer exists."
+            : "Couldn't load this conversation. Try again."
+        );
+        setMessages([]);
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingHistory(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [conversationIdFromUrl]);
+
+  const handleInputChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+  ) => {
     setInput(e.target.value);
   };
 
-  // ─── Shared streaming runner ─────────────────────────────────────────
-  // Pushes the user message, opens an empty assistant slot, and consumes
-  // the SSE stream from /api/orchestrate, appending tokens as they arrive.
-  // AbortController is stored on a ref so the Stop button can call .abort().
+  // ─── Submit pipeline ─────────────────────────────────────────────────
   const runChat = useCallback(
     async (userText: string) => {
       const userMessage: ChatMsg = { role: "user", content: userText };
@@ -72,6 +181,16 @@ export default function ChatPage() {
         assistantIdx = next.length - 1;
         return next;
       });
+
+      const updateAssistant = (content: string) => {
+        setMessages((prev) => {
+          const next = [...prev];
+          if (next[assistantIdx]?.role === "assistant") {
+            next[assistantIdx] = { ...next[assistantIdx], content };
+          }
+          return next;
+        });
+      };
 
       const ac = new AbortController();
       abortRef.current = ac;
@@ -84,7 +203,6 @@ export default function ChatPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             messages: [userMessage],
-            // null means "auto-detect on the server" (sentimentNode picks)
             mood: selectedMood,
             conversationId: conversationIdRef.current,
           }),
@@ -107,7 +225,6 @@ export default function ChatPage() {
           if (done) break;
           buffer += decoder.decode(value, { stream: true });
 
-          // SSE frames are separated by blank lines.
           const frames = buffer.split("\n\n");
           buffer = frames.pop() ?? "";
 
@@ -117,36 +234,76 @@ export default function ChatPage() {
             const payload = line.slice(6).trim();
             if (!payload) continue;
 
-            let evt: { type: string; content?: string; mode?: "fast" | "graph"; id?: string };
+            let evt: SseEvent;
             try {
-              evt = JSON.parse(payload);
+              evt = JSON.parse(payload) as SseEvent;
             } catch {
               continue;
             }
 
-            if (evt.type === "start") {
-              if (evt.mode) setStreamMode(evt.mode);
-            } else if (evt.type === "conversation" && evt.id) {
-              conversationIdRef.current = evt.id;
-            } else if (evt.type === "token" && evt.content) {
-              acc += evt.content;
-              setMessages((prev) => {
-                const next = [...prev];
-                if (assistantIdx >= 0 && next[assistantIdx]?.role === "assistant") {
-                  next[assistantIdx] = { ...next[assistantIdx], content: acc };
+            switch (evt.type) {
+              case "start":
+                if (evt.mode) setStreamMode(evt.mode);
+                if (evt.mode === "image") {
+                  updateAssistant("🎨 Sending your prompt to the image model…");
                 }
-                return next;
-              });
-            } else if (evt.type === "aborted") {
-              break readLoop;
-            } else if (evt.type === "error") {
-              console.error("[chat] Stream error:", evt.content);
+                break;
+
+              case "conversation":
+                conversationIdRef.current = evt.id;
+                // Sync the URL so a refresh keeps the user on this convo
+                // (and the sidebar's active-state highlight tracks it).
+                // Use history.replaceState so we don't trigger a re-render
+                // and lose the in-progress message slot.
+                if (typeof window !== "undefined") {
+                  const newUrl = `/chat?c=${evt.id}`;
+                  window.history.replaceState({}, "", newUrl);
+                }
+                dispatchConversationsInvalidate();
+                break;
+
+              case "token":
+                acc += evt.content;
+                updateAssistant(acc);
+                break;
+
+              case "image_progress":
+                updateAssistant(
+                  evt.phase === "generating"
+                    ? "🎨 Generating your image…"
+                    : "📤 Uploading…"
+                );
+                break;
+
+              case "image_done":
+                updateAssistant(
+                  `Here's your image — _${evt.prompt}_\n\n![${evt.prompt}](${evt.url})`
+                );
+                break;
+
+              case "image_failed":
+                updateAssistant(`❌ ${evt.error}`);
+                break;
+
+              case "aborted":
+                break readLoop;
+
+              case "error":
+                console.error("[chat] stream error:", evt.content);
+                break;
+
+              case "done":
+                // Conversation's updatedAt was just bumped server-side —
+                // tell the sidebar so this conversation moves to the top.
+                dispatchConversationsInvalidate();
+                break;
             }
           }
         }
-      } catch (err: any) {
-        if (err?.name === "AbortError") {
-          // User-initiated stop. Append a soft trailing marker.
+      } catch (err) {
+        if ((err as { name?: string })?.name === "AbortError") {
+          // User pressed Stop — append a soft "(stopped)" marker to whatever
+          // partial response we already streamed.
           setMessages((prev) => {
             const next = [...prev];
             const last = next[next.length - 1];
@@ -159,18 +316,8 @@ export default function ChatPage() {
             return next;
           });
         } else {
-          console.error("[chat] Failed:", err);
-          setMessages((prev) => {
-            const next = [...prev];
-            const last = next[next.length - 1];
-            if (last?.role === "assistant" && !last.content) {
-              next[next.length - 1] = {
-                ...last,
-                content: "Sorry — something went wrong. Please try again.",
-              };
-            }
-            return next;
-          });
+          console.error("[chat] failed:", err);
+          updateAssistant("Sorry — something went wrong. Please try again.");
         }
       } finally {
         setIsLoading(false);
@@ -201,23 +348,49 @@ export default function ChatPage() {
     void runChat(prompt);
   };
 
-  // Cleanup on unmount — don't leave a dangling fetch.
+  // Cleanup on unmount: abort the chat fetch.
   useEffect(() => {
     return () => abortRef.current?.abort();
   }, []);
 
+  // ─── Render ──────────────────────────────────────────────────────────
+  let mainContent: React.ReactNode;
+  if (isLoadingHistory) {
+    mainContent = (
+      <div className="flex-1 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3 text-zinc-500">
+          <Loader2 className="size-6 animate-spin" />
+          <span className="text-xs">Loading conversation…</span>
+        </div>
+      </div>
+    );
+  } else if (historyError) {
+    mainContent = (
+      <div className="flex-1 flex items-center justify-center px-6">
+        <div className="max-w-md text-center">
+          <p className="text-zinc-300 text-sm mb-3">{historyError}</p>
+          <a href="/chat" className="text-indigo-400 text-sm hover:underline">
+            Start a new conversation
+          </a>
+        </div>
+      </div>
+    );
+  } else if (messages.length === 0) {
+    mainContent = (
+      <EmptyState onSelect={handleSuggestionClick} selectedMood={selectedMood ?? undefined} />
+    );
+  } else {
+    mainContent = (
+      <MessageList messages={messages} isLoading={isLoading} mode={streamMode} />
+    );
+  }
+
   return (
-    // h-dvh + overflow-hidden = the chat surface owns the viewport entirely.
-    // No outer scroll. Only the message list scrolls inside.
     <div className="relative h-dvh flex flex-col overflow-hidden">
       <ChatNavbar isPremium={isPremium} />
 
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {messages.length === 0 ? (
-          <EmptyState onSelect={handleSuggestionClick} selectedMood={selectedMood ?? undefined} />
-        ) : (
-          <MessageList messages={messages as any} isLoading={isLoading} mode={streamMode} />
-        )}
+        {mainContent}
       </main>
 
       <MoodChips />
@@ -245,5 +418,24 @@ export default function ChatPage() {
         )}
       </AnimatePresence>
     </div>
+  );
+}
+
+/**
+ * useSearchParams() must live under a Suspense boundary in App Router.
+ * The boundary's fallback is the same loading UI the inner component
+ * shows for history loads, so the transition is seamless.
+ */
+export default function ChatPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="h-dvh flex items-center justify-center bg-black">
+          <Loader2 className="size-6 animate-spin text-indigo-400" />
+        </div>
+      }
+    >
+      <ChatPageInner />
+    </Suspense>
   );
 }

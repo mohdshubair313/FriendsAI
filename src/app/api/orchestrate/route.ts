@@ -1,81 +1,50 @@
 import { NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
-import { AIMessage, HumanMessage, SystemMessage } from "@langchain/core/messages";
+import { AIMessage, BaseMessage, HumanMessage, SystemMessage } from "@langchain/core/messages";
+import { Types } from "mongoose";
 
 import { generateSchema } from "@/lib/schemas";
-import { agentGraph } from "@/agents";
-import { buddyAgent } from "@/agents/specialists/buddyAgent";
-import { getEntitlement } from "@/lib/entitlement";
-import { Conversation } from "@/models/Conversation";
 import { connectToDb } from "@/lib/db";
+import { Conversation, Message } from "@/models/Conversation";
+import { MediaJob } from "@/models/MediaJob";
+import { UserPreferences } from "@/models/UserPreferences";
+import { detectIntent, stripImagePrefix } from "@/lib/chat/intentRouter";
+import { streamChat } from "@/lib/chat/streamChat";
+import { generateImage, ImageGenerationError } from "@/lib/chat/generateImage";
+import { errMessage, isAbort } from "@/lib/errors";
 
 export const runtime = "nodejs";
+export const maxDuration = 60;
 
 /**
- * Fast-path eligibility:
- *   - plain text (not multimodal),
- *   - short (< 80 chars),
- *   - no slash-command (those need the full graph),
- *   - matches a known small-talk pattern.
+ * POST /api/orchestrate
  *
- * When eligible, the route bypasses safety/intent/sentiment/supervisor
- * and streams from buddyAgent directly. Trades the orchestration overhead
- * (~5 LLM calls) for a single LLM call → first token in ~1-2s instead
- * of ~30s on free OpenRouter tiers.
+ * Single entry point for both chat and image-generation requests.
+ *
+ *   intent = "chat"   → streamChat (1 LLM call, tokens streamed via SSE)
+ *   intent = "image"  → generateImage (Cloudflare → Cloudinary, sync)
+ *
+ * Both paths complete inside a single SSE response — no background workers,
+ * no queues, no client-side polling. Image generation is sync because
+ * Cloudflare Workers AI returns the image inline (~3-5s + ~1-2s upload).
+ *
+ * SSE event protocol:
+ *   { type: "start", mode: "chat" | "image" }
+ *   { type: "conversation", id }                    (only when freshly minted)
+ *   { type: "token", content }                      chat only
+ *   { type: "image_progress", phase: "generating" | "uploading" }
+ *   { type: "image_done", url, prompt }             final image URL
+ *   { type: "image_failed", error }
+ *   { type: "aborted" }                              user pressed Stop
+ *   { type: "error", content }                       unexpected server error
+ *   { type: "done" }                                 terminal frame
  */
-const FAST_PATH_PATTERNS: RegExp[] = [
-  /^(hi+|hello+|hey+|hola|namaste|namastey|yo|sup|hii+|heyy+)\b/i,
-  /^(thanks?|thank\s*you|thx|ty|tysm)\b/i,
-  /^(who\s+(are|r)\s+(you|u)|what'?s?\s+your\s+name|what\s+(are|r)\s+(you|u))\b/i,
-  /^(what\s+can\s+(you|u)\s+do|what\s+do\s+(you|u)\s+do|how\s+do\s+(you|u)\s+work)\b/i,
-  /^(how\s+(are|r)\s+(you|u)|how\s*'?s?\s+(it\s+going|everything)|what\s*'?s?\s+up)\b/i,
-  /^(good\s+(morning|evening|night|afternoon))\b/i,
-  /^(bye|goodbye|see\s*ya|cya|gn|gtg|ttyl)\b/i,
-  /^(ok|okay|cool|nice|great|awesome|got\s+it|sure|alright|right|yes|yep|yeah|no|nope|nah)[\s.!?]*$/i,
-  /^(lol|lmao|haha+|hehe+|omg|wow)\b/i,
-];
 
-function isFastPathEligible(latestText: string, isMultimodal: boolean): boolean {
-  if (isMultimodal) return false;
-  const trimmed = latestText.trim();
-  if (!trimmed) return false;
-  if (trimmed.startsWith("/")) return false;
-  if (trimmed.length > 80) return false;
-  return FAST_PATH_PATTERNS.some((p) => p.test(trimmed));
-}
-
-function sanitizeContent(content: any): any {
-  if (typeof content === "string") {
-    return content
-      .replace(/<script\b[^<]*(?:(?!<script)<[^<]*)*<\/script>/gi, "")
-      .replace(/javascript:/gi, "")
-      .replace(/on\w+\s*=/gi, "")
-      .replace(/eval\s*\(/gi, "");
-  }
-  if (Array.isArray(content)) {
-    return content.map((part: any) => {
-      if (part.type === "text" && part.text) {
-        return { ...part, text: sanitizeContent(part.text) };
-      }
-      return part;
-    });
-  }
-  return content;
-}
-
-const FALLBACK_REPLIES: Record<string, string> = {
-  friendly: `Hi there! Thanks for reaching out. I'm here to chat, help, and connect with you. What's on your mind?`,
-  happy: `Wow, it's great to hear from you! I'm so happy you're here! What would you like to talk about?`,
-  sad: `Hey, I'm here for you. Even when things feel tough, remember you're not alone. Want to share what's going on?`,
-  funny: `Haha, good to see you! 😄 You've got my full attention. What's funny today?`,
-  motivational: `You've got this! 🚀 Every step forward counts. I'm here to support your journey. What's your goal?`,
-  romantic: `💝 It's so wonderful to connect with you. Tell me what's in your heart...`,
-  philosophical: `Interesting question... Let's explore this together. What are your thoughts?`,
-  angry: `I hear you. Let's work through this together. What's troubling you?`,
-};
+const FALLBACK_REPLY =
+  "I'm having trouble responding right now — try sending that again in a moment.";
 
 const encoder = new TextEncoder();
-const sse = (data: any) => encoder.encode(`data: ${JSON.stringify(data)}\n\n`);
+const sse = (data: unknown) => encoder.encode(`data: ${JSON.stringify(data)}\n\n`);
 
 function jsonError(message: string, status: number) {
   return new Response(JSON.stringify({ error: message }), {
@@ -84,91 +53,172 @@ function jsonError(message: string, status: number) {
   });
 }
 
+// ─── Wire types for incoming request body ────────────────────────────────────
+
+type RawTextPart = { type: "text"; text?: string };
+type RawImagePart = { type: "image"; image?: unknown };
+type RawPart = RawTextPart | RawImagePart | { type: string;[k: string]: unknown };
+type RawMessage = {
+  role?: "user" | "assistant" | "system";
+  content?: unknown;
+  parts?: RawPart[];
+};
+
+// ─── Pure helpers (no side effects) ──────────────────────────────────────────
+
+function sanitizeString(s: string): string {
+  return s
+    .replace(/<script\b[^<]*(?:(?!<script)<[^<]*)*<\/script>/gi, "")
+    .replace(/javascript:/gi, "")
+    .replace(/on\w+\s*=/gi, "")
+    .replace(/eval\s*\(/gi, "");
+}
+
+function sanitizeContent(content: unknown): unknown {
+  if (typeof content === "string") return sanitizeString(content);
+  if (Array.isArray(content)) {
+    return content.map((part) => {
+      if (
+        part &&
+        typeof part === "object" &&
+        (part as { type?: unknown }).type === "text" &&
+        typeof (part as { text?: unknown }).text === "string"
+      ) {
+        return { ...(part as object), text: sanitizeString((part as { text: string }).text) };
+      }
+      return part;
+    });
+  }
+  return content;
+}
+
+function toLangChainMessages(rawMessages: RawMessage[]): BaseMessage[] {
+  return rawMessages.map((m) => {
+    let content: unknown = sanitizeContent(m.content);
+
+    if (!content && Array.isArray(m.parts)) {
+      const arr = m.parts.map((part) => {
+        if (part.type === "text") {
+          const t = (part as RawTextPart).text ?? "";
+          return { type: "text", text: typeof t === "string" ? sanitizeString(t) : "" };
+        }
+        if (part.type === "image") {
+          return { type: "image_url", image_url: (part as RawImagePart).image };
+        }
+        return part;
+      });
+      content =
+        arr.length === 1 && (arr[0] as { type?: string }).type === "text"
+          ? (arr[0] as { text: string }).text
+          : arr;
+    }
+
+    if (m.role === "user") return new HumanMessage({ content: content as string });
+    if (m.role === "system") return new SystemMessage({ content: content as string });
+    return new AIMessage({ content: content as string });
+  });
+}
+
+function extractLatestText(messages: BaseMessage[]): string {
+  const last = messages[messages.length - 1];
+  const content = last?.content as unknown;
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) {
+    const textPart = content.find(
+      (p): p is { type: "text"; text: string } =>
+        !!p && typeof p === "object" && (p as { type?: unknown }).type === "text"
+    );
+    return textPart?.text ?? "";
+  }
+  return "";
+}
+
+function countryFromLocale(locale: string | undefined): string {
+  const part = locale?.split("-")[1]?.toUpperCase();
+  return part && part.length === 2 ? part : "US";
+}
+
+// ─── Handler ─────────────────────────────────────────────────────────────────
+
 export async function POST(req: NextRequest) {
+  // Trace IDs + timing for the whole request. Each log line carries the
+  // request id + an "elapsed since start" so it's easy to spot which
+  // phase is slow under load.
+  const reqId = Math.random().toString(36).slice(2, 8);
+  const t0 = Date.now();
+  const ms = () => `${Date.now() - t0}ms`;
+  const log = (...args: unknown[]) => console.log(`[orch:${reqId}]`, ms(), ...args);
+
+  log("POST /api/orchestrate");
+
   const token = await getToken({ req, secret: process.env.AUTH_SECRET });
   if (!token?.id) {
-    console.log("[orchestrate] No token - unauthorized");
+    log("auth FAIL — no token");
     return jsonError("Unauthorized", 401);
   }
+  log(`auth OK userId=${token.id}`);
 
-  let body: any;
+  let body: unknown;
   try {
     body = await req.json();
   } catch {
+    log("parse FAIL — invalid JSON");
     return jsonError("Invalid JSON", 400);
   }
-  console.log("[orchestrate] Body:", JSON.stringify(body).slice(0, 300));
 
   const parsed = generateSchema.safeParse(body);
   if (!parsed.success) {
-    console.log("[orchestrate] Schema error:", parsed.error.issues);
+    log("schema FAIL", parsed.error.issues[0]?.message);
     return jsonError(`Invalid: ${parsed.error.issues[0]?.message}`, 400);
   }
+  const { messages: rawMessages, mood, conversationId } = parsed.data;
+  const userId = token.id as string;
+  const moodKey = mood ?? null;
 
-  const { messages, mood, conversationId } = parsed.data;
+  const messages = toLangChainMessages(rawMessages);
+  const latestText = extractLatestText(messages);
+  const intent = detectIntent(latestText);
+  log(`intent=${intent} mood=${moodKey ?? "auto"} text="${latestText.slice(0, 60)}"`);
 
-  const langchainMessages = messages.map((m: any) => {
-    let content = sanitizeContent(m.content);
-    if (!content && m.parts && Array.isArray(m.parts)) {
-      content = m.parts.map((part: any) => {
-        if (part.type === "text") return { type: "text", text: sanitizeContent(part.text) };
-        if (part.type === "image") return { type: "image_url", image_url: part.image };
-        return part;
-      });
-      if (content.length === 1 && content[0]?.type === "text") {
-        content = content[0].text;
-      }
-    }
-    if (m.role === "user") return new HumanMessage({ content, additional_kwargs: {} });
-    if (m.role === "system") return new SystemMessage({ content, additional_kwargs: {} });
-    return new AIMessage({ content, additional_kwargs: {} });
-  });
-
-  console.log("[orchestrate] LangChain messages:", langchainMessages.length);
-
-  // `mood` may be null/undefined (= auto-detect). Don't coerce to "friendly"
-  // here — the buddyAgent does the user > detected > default resolution.
-  const moodKey = (mood ?? null) as string | null;
-
-  // ─── Fast-path detection ──────────────────────────────────────────
-  const lastUserMsg = langchainMessages[langchainMessages.length - 1];
-  const lastContent = lastUserMsg?.content as unknown;
-  let lastText: string = "";
-  let isMultimodal = false;
-  if (typeof lastContent === "string") {
-    lastText = lastContent;
-  } else if (Array.isArray(lastContent)) {
-    const parts = lastContent as Array<{ type?: string; text?: string }>;
-    const textPart = parts.find((p) => p?.type === "text");
-    lastText = textPart?.text ?? "";
-    isMultimodal = parts.some((p) => p?.type === "image_url");
-  }
-  const useFastPath = isFastPathEligible(lastText, isMultimodal);
-  if (useFastPath) {
-    console.log("[orchestrate] ⚡ Fast-path:", JSON.stringify(lastText.slice(0, 40)));
-  }
-
-  // ─── Conversation auto-mint ────────────────────────────────────────
-  // Required so downstream nodes (imageGenerationNode, persistenceNode)
-  // can attach jobs / messages to a real Conversation document.
-  // The minted ID is sent back to the client as a `conversation` SSE
-  // event so subsequent turns reuse it.
+  // ─── Conversation: load existing or auto-mint ──────────────────────────────
   let resolvedConversationId: string | null = conversationId ?? null;
   let createdConversation = false;
   try {
     await connectToDb();
+    log("db connected");
     if (!resolvedConversationId) {
-      const title = lastText.slice(0, 60).trim() || "New conversation";
-      const conv = await Conversation.create({ userId: token.id, title });
+      const title = latestText.slice(0, 60).trim() || "New conversation";
+      const conv = await Conversation.create({ userId, title });
       resolvedConversationId = conv._id.toString();
       createdConversation = true;
-      console.log("[orchestrate] Minted conversation:", resolvedConversationId);
+      log(`conversation minted ${resolvedConversationId}`);
+    } else {
+      log(`conversation reused ${resolvedConversationId}`);
     }
-  } catch (err: any) {
-    // Non-fatal: chat still works, but image-gen will fail clean later.
-    console.error("[orchestrate] Conversation mint failed:", err?.message || err);
+  } catch (err) {
+    log("conversation FAIL —", errMessage(err));
   }
 
+  // Save user message to history + bump conversation's updatedAt so the
+  // sidebar's "recent" sort reflects the latest activity. Both writes are
+  // best-effort and non-blocking — chat shouldn't stall on a slow DB.
+  if (resolvedConversationId && latestText) {
+    const convObjectId = new Types.ObjectId(resolvedConversationId);
+    Message.create({
+      conversationId: convObjectId,
+      role: "user",
+      content: latestText,
+      parts: [{ type: "text", text: latestText }],
+    })
+      .then(() => log("user msg saved"))
+      .catch((e) => log("user msg save FAIL —", errMessage(e)));
+    Conversation.updateOne(
+      { _id: convObjectId },
+      { $currentDate: { updatedAt: true } }
+    ).catch((e) => log("conv touch FAIL —", errMessage(e)));
+  }
+
+  // ─── SSE Stream ────────────────────────────────────────────────────────────
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       let closed = false;
@@ -176,22 +226,17 @@ export async function POST(req: NextRequest) {
         if (closed) return;
         try {
           controller.enqueue(chunk);
-        } catch {
-          /* controller may already be closed */
-        }
+        } catch { /* controller may already be closed */ }
       };
       const safeClose = () => {
         if (closed) return;
         closed = true;
         try {
           controller.close();
-        } catch {
-          /* already closed */
-        }
+        } catch { /* already closed */ }
       };
 
       const onAbort = () => {
-        console.log("[orchestrate] Client aborted");
         safeEnqueue(sse({ type: "aborted" }));
         safeClose();
       };
@@ -200,120 +245,84 @@ export async function POST(req: NextRequest) {
       type SseChunk = {
         type: string;
         content?: string;
-        mode?: "fast" | "graph";
+        mode?: "chat" | "image";
         id?: string;
+        url?: string;
+        prompt?: string;
+        phase?: "generating" | "uploading";
+        error?: string;
       };
       const writer = (chunk: SseChunk) => {
         if (req.signal.aborted) return;
         safeEnqueue(sse(chunk));
       };
 
-      let streamedAnyToken = false;
-      const trackingWriter = (chunk: SseChunk) => {
-        if (chunk.type === "token" && chunk.content) streamedAnyToken = true;
-        writer(chunk);
-      };
-
       try {
-        // Tell the client we accepted the request — useful for "thinking…" UIs
-        // that want a signal before the first token actually arrives.
-        writer({ type: "start", mode: useFastPath ? "fast" : "graph" });
-
-        // If the route minted a fresh Conversation, send the id back so the
-        // client can persist it for the rest of the session.
+        log("sse start");
+        writer({ type: "start", mode: intent });
         if (createdConversation && resolvedConversationId) {
           writer({ type: "conversation", id: resolvedConversationId });
         }
 
-        // ─── FAST PATH ────────────────────────────────────────────
-        // Skip safety/intent/sentiment/supervisor for short small-talk.
-        // The greeting set is inherently safe + non-routable, so the
-        // 5-LLM-call orchestration overhead is pure waste here.
-        if (useFastPath) {
-          await buddyAgent(
-            {
-              messages: langchainMessages,
-              next: "buddy",
-              mood: moodKey,
-              detectedMood: null,
-              premium: false,
-              isSafe: true,
-              intent: "casual_chat",
-              finalResponse: false,
-              conversationId: resolvedConversationId,
-              userId: token.id as string,
-            } as any,
-            {
-              configurable: {
-                streamWriter: trackingWriter,
-                abortSignal: req.signal,
-              },
-            }
-          );
-
-          if (req.signal.aborted) return;
-          if (!streamedAnyToken) {
-            const fallback = FALLBACK_REPLIES[moodKey ?? "friendly"] ?? FALLBACK_REPLIES.friendly;
-            writer({ type: "token", content: fallback });
-          }
-          writer({ type: "done" });
-          return;
-        }
-
-        // ─── FULL GRAPH ────────────────────────────────────────────
-        const entitlement = await getEntitlement(token.id as string);
-        console.log("[orchestrate] Entitlement:", entitlement.tier);
-
-        const result = await agentGraph.invoke(
-          {
-            messages: langchainMessages,
-            mood: moodKey,
-            premium: entitlement.tier === "pro",
-            finalResponse: false,
-            userId: token.id as string,
+        if (intent === "image") {
+          log("→ image branch");
+          await handleImageRequest({
+            userId,
             conversationId: resolvedConversationId,
-          },
-          {
-            configurable: {
-              sessionId: "session-" + token.id,
-              thread_id: "thread-" + token.id,
-              streamWriter: trackingWriter,
-              abortSignal: req.signal,
-            },
-          }
-        );
-
-        if (req.signal.aborted) {
-          // onAbort already drained + closed the stream.
+            prompt: stripImagePrefix(latestText),
+            writer,
+            signal: req.signal,
+          });
+          writer({ type: "done" });
+          log(`image done — total ${ms()}`);
           return;
         }
 
-        // If buddyAgent never emitted a token (e.g. graph routed to a node
-        // that hasn't been wired for streaming yet), fall back to whatever
-        // sits on the last AIMessage.
-        if (!streamedAnyToken) {
-          const last = result.messages?.[result.messages.length - 1];
-          const text =
-            last?.content?.toString() ||
-            FALLBACK_REPLIES[moodKey ?? "friendly"] ||
-            FALLBACK_REPLIES.friendly;
-          console.log("[orchestrate] No tokens streamed, flushing final:", text.slice(0, 50));
-          writer({ type: "token", content: text });
+        // ─── Chat path: direct LLM stream ─────────────────────────────
+        log("→ chat branch (calling streamChat)");
+        let acc = "";
+        try {
+          acc = await streamChat({
+            messages,
+            mood: moodKey,
+            signal: req.signal,
+            writer,
+          });
+        } catch (err) {
+          if (req.signal.aborted || isAbort(err)) {
+            log("aborted by client");
+            return;
+          }
+          throw err;
+        }
+
+        if (req.signal.aborted) return;
+        log(`chat reply ready chars=${acc.length}`);
+
+        if (resolvedConversationId && acc) {
+          const convObjectId = new Types.ObjectId(resolvedConversationId);
+          Message.create({
+            conversationId: convObjectId,
+            role: "assistant",
+            content: acc,
+            parts: [{ type: "text", text: acc }],
+          })
+            .then(() => log("assistant msg saved"))
+            .catch((e) => log("assistant msg save FAIL —", errMessage(e)));
+          Conversation.updateOne(
+            { _id: convObjectId },
+            { $currentDate: { updatedAt: true } }
+          ).catch((e) => log("conv touch FAIL —", errMessage(e)));
         }
 
         writer({ type: "done" });
-      } catch (err: any) {
-        if (req.signal.aborted || err?.name === "AbortError") {
-          // Already handled by onAbort.
-          return;
-        }
-        console.error("[orchestrate] Graph error:", err?.message || err);
-
-        if (!streamedAnyToken) {
-          const fallback = FALLBACK_REPLIES[moodKey ?? "friendly"] || FALLBACK_REPLIES.friendly;
-          writer({ type: "token", content: fallback });
-        }
-        writer({ type: "error", content: err?.message || "Graph failed" });
+        log(`chat done — total ${ms()}`);
+      } catch (err) {
+        if (req.signal.aborted || isAbort(err)) return;
+        const message = errMessage(err);
+        log("handler ERROR —", message);
+        writer({ type: "error", content: message || "Server error" });
+        writer({ type: "token", content: FALLBACK_REPLY });
         writer({ type: "done" });
       } finally {
         req.signal.removeEventListener("abort", onAbort);
@@ -327,8 +336,131 @@ export async function POST(req: NextRequest) {
       "Content-Type": "text/event-stream; charset=utf-8",
       "Cache-Control": "no-cache, no-transform",
       Connection: "keep-alive",
-      // Disables buffering on Vercel / nginx so tokens flush immediately.
       "X-Accel-Buffering": "no",
     },
   });
+}
+
+// ─── Image-path helper ───────────────────────────────────────────────────────
+
+/**
+ * End-to-end image generation:
+ *   validate → MediaJob(running) → Cloudflare → Cloudinary → MediaJob(succeeded)
+ *
+ * Each phase emits an SSE progress event so the client can show meaningful
+ * status text instead of a generic spinner.
+ */
+async function handleImageRequest(args: {
+  userId: string;
+  conversationId: string | null;
+  prompt: string;
+  signal: AbortSignal;
+  writer: (chunk: {
+    type: string;
+    url?: string;
+    prompt?: string;
+    phase?: "generating" | "uploading";
+    error?: string;
+  }) => void;
+}) {
+  const { userId, conversationId, prompt, signal, writer } = args;
+
+  if (!prompt) {
+    writer({
+      type: "image_failed",
+      error: "Tell me what to draw — e.g. `/image a calico cat in space`.",
+    });
+    return;
+  }
+  if (!conversationId) {
+    writer({
+      type: "image_failed",
+      error: "Couldn't attach the image to a conversation. Refresh and retry.",
+    });
+    return;
+  }
+
+  // Country from prefs satisfies MediaJob's required locale.country field.
+  const prefs = await UserPreferences.findOne({ userId })
+    .lean<{ locale?: string }>()
+    .catch(() => null);
+  const country = countryFromLocale(prefs?.locale);
+
+  let job: { _id: { toString(): string } };
+  try {
+    job = await MediaJob.create({
+      userId,
+      conversationId,
+      kind: "image",
+      prompt,
+      modelId: "@cf/black-forest-labs/flux-1-schnell",
+      status: "running",
+      locale: { country },
+    });
+  } catch (err) {
+    console.error("[orchestrate:image] MediaJob.create failed:", errMessage(err));
+    writer({ type: "image_failed", error: "Could not record the image job. Try again." });
+    return;
+  }
+
+  writer({ type: "image_progress", phase: "generating" });
+
+  try {
+    const result = await generateImage(prompt);
+    if (signal.aborted) return;
+
+    writer({ type: "image_progress", phase: "uploading" });
+    // (Cloudinary upload already happened inside generateImage. The
+    // separate progress event is purely for nicer client-side phasing —
+    // the actual work is done. Kept lightweight on purpose.)
+
+    await MediaJob.findByIdAndUpdate(job._id, {
+      status: "succeeded",
+      resultUrl: result.url,
+      finishedAt: new Date(),
+    });
+
+    // Persist the assistant message with the image part so it shows up
+    // in conversation history on reload, and touch the conversation's
+    // updatedAt so the sidebar's recent-activity sort stays correct.
+    const convObjectId = new Types.ObjectId(conversationId);
+    Message.create({
+      conversationId: convObjectId,
+      role: "assistant",
+      content: `Here's your image — ${prompt}`,
+      parts: [
+        { type: "text", text: `Here's your image — ${prompt}` },
+        { type: "image", mediaJobId: new Types.ObjectId(job._id.toString()), url: result.url },
+      ],
+    }).catch((e) =>
+      console.error("[orchestrate:image] save msg failed:", errMessage(e))
+    );
+    Conversation.updateOne(
+      { _id: convObjectId },
+      { $currentDate: { updatedAt: true } }
+    ).catch((e) => console.error("[orchestrate:image] conv touch failed:", errMessage(e)));
+
+    writer({ type: "image_done", url: result.url, prompt });
+  } catch (err) {
+    const code = err instanceof ImageGenerationError ? err.code : "unknown";
+    const message = errMessage(err);
+    console.error("[orchestrate:image] failed:", code, message);
+
+    await MediaJob.findByIdAndUpdate(job._id, {
+      status: "failed",
+      error: { code, message },
+      finishedAt: new Date(),
+    }).catch(() => {});
+
+    const userFacing =
+      code === "config_missing"
+        ? "Image generation isn't configured on the server."
+        : code === "provider_timeout"
+          ? "The image generator took too long. Try a simpler prompt."
+          : code === "upload_failed"
+            ? "Couldn't save your image. Try again in a moment."
+            : "Image generation failed. Try again.";
+
+    writer({ type: "image_failed", error: userFacing });
+  }
 }

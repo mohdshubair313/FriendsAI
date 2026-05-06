@@ -6,7 +6,14 @@ import type { NextRequest } from "next/server";
  * Protected route prefixes — unauthenticated users
  * are redirected to /signin with a callbackUrl.
  */
-const PROTECTED_PREFIXES = ["/chat", "/premium", "/live_talk", "/settings", "/profile"];
+const PROTECTED_PREFIXES = [
+  "/chat",
+  "/premium",
+  "/live_talk",
+  "/settings",
+  "/profile",
+  "/images",
+];
 
 /**
  * API routes that require authentication.
@@ -15,6 +22,7 @@ const PROTECTED_API_PREFIXES = [
   "/api/orchestrate",
   "/api/voice",
   "/api/media",
+  "/api/conversations",
   "/api/create-order",
   "/api/verify-payment",
   "/api/check-subscription",
@@ -55,9 +63,11 @@ export const config = {
     "/live_talk/:path*",
     "/settings/:path*",
     "/profile/:path*",
+    "/images/:path*",
     "/api/orchestrate/:path*",
     "/api/voice/:path*",
     "/api/media/:path*",
+    "/api/conversations/:path*",
     "/api/create-order/:path*",
     "/api/verify-payment/:path*",
     "/api/check-subscription/:path*",

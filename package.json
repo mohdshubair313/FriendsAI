@@ -6,7 +6,6 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "worker": "tsx src/worker.ts",
     "lint": "next lint"
   },
   "dependencies": {
@@ -38,12 +37,11 @@
     "@vercel/analytics": "^1.5.0",
     "ai": "^6.0.0-beta.136",
     "bcryptjs": "^2.4.3",
-    "bullmq": "^5.76.2",
     "canvas-confetti": "^1.9.4",
     "class-variance-authority": "^0.7.1",
+    "cloudinary": "^2.10.0",
     "clsx": "^2.1.1",
     "framer-motion": "^12.23.24",
-    "ioredis": "^5.10.1",
     "js-base64": "^3.7.7",
     "lucide-react": "^0.469.0",
     "mongodb": "^7.0.0",

@@ -1,61 +1,73 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import { getEntitlement } from "@/lib/entitlement";
-import { getProviderApiKey, routeModel } from "@/services/providers/registry";
+import { transcribeAudio, CloudflareVoiceError } from "@/lib/voice/cloudflareSpeech";
+import { errMessage } from "@/lib/errors";
 
 export const runtime = "nodejs";
 
+/**
+ * POST /api/voice/transcribe
+ *
+ * Accepts an audio file (multipart/form-data with field "audio") and
+ * returns the transcribed text via Cloudflare Whisper Large v3 Turbo.
+ *
+ * Used by /live_talk for the speech-to-text leg of the voice pipeline.
+ * Premium-only because voice features are a paid feature.
+ *
+ * Request:
+ *   FormData: { audio: Blob (webm/mp3/wav/m4a) }
+ * Response:
+ *   { text: string }   — empty string is valid (no speech detected)
+ */
 export async function POST(req: NextRequest) {
-  // Auth check
   const token = await getToken({ req, secret: process.env.AUTH_SECRET });
   if (!token?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  try {
-    const entitlement = await getEntitlement(token.id as string);
-    if (!entitlement.features.voiceConversational) {
-      return NextResponse.json(
-        { error: "Voice features require Premium tier." },
-        { status: 403 }
-      );
-    }
-
-    const { audioBase64, mimeType } = await req.json();
-
-    if (!audioBase64) {
-      return NextResponse.json({ error: "No audio data provided" }, { status: 400 });
-    }
-
-    const apiKey = getProviderApiKey("google");
-    if (!apiKey) {
-      return NextResponse.json({ error: "Voice service not configured" }, { status: 503 });
-    }
-    
-    const config = routeModel("voice_stt");
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: config.modelId });
-
-    const result = await model.generateContent([
-      {
-        inlineData: {
-          mimeType: mimeType || "audio/wav",
-          data: audioBase64
-        }
-      },
-      { text: "Please transcribe the spoken language in this audio accurately. Ignore any background noise or non-speech sounds. Output ONLY the transcription text." },
-    ]);
-
-    const transcription = result.response.text();
-
-    return NextResponse.json({ transcription });
-
-  } catch (error) {
-    console.error("[transcribe] Error:", error);
+  const entitlement = await getEntitlement(token.id as string);
+  if (!entitlement.features.voiceConversational) {
     return NextResponse.json(
-      { error: "Failed to transcribe audio." },
-      { status: 500 }
+      { error: "Voice features require Premium tier." },
+      { status: 403 }
+    );
+  }
+
+  let audioBuffer: Buffer;
+  try {
+    const formData = await req.formData();
+    const file = formData.get("audio");
+    if (!(file instanceof Blob)) {
+      return NextResponse.json({ error: "Missing 'audio' file" }, { status: 400 });
+    }
+    if (file.size === 0) {
+      return NextResponse.json({ text: "" });
+    }
+    if (file.size > 25 * 1024 * 1024) {
+      return NextResponse.json({ error: "Audio file too large (max 25 MB)" }, { status: 413 });
+    }
+    audioBuffer = Buffer.from(await file.arrayBuffer());
+  } catch (err) {
+    return NextResponse.json(
+      { error: `Could not read audio: ${errMessage(err)}` },
+      { status: 400 }
+    );
+  }
+
+  try {
+    const text = await transcribeAudio(audioBuffer);
+    return NextResponse.json({ text });
+  } catch (err) {
+    const code = err instanceof CloudflareVoiceError ? err.code : "unknown";
+    console.error("[voice:transcribe] failed:", code, errMessage(err));
+    const status =
+      code === "config_missing" ? 503 :
+      code === "provider_timeout" ? 504 :
+      500;
+    return NextResponse.json(
+      { error: "Transcription failed.", code },
+      { status }
     );
   }
 }
