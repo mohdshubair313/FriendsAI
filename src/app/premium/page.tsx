@@ -25,7 +25,7 @@ import UsageMeter from "@/components/chatComponents/UsageMeter";
 import { useAppSelector, useAppDispatch } from "@/store/hooks";
 import { cn } from "@/lib/utils";
 import { useEffect } from "react";
-import { fetchPremiumStatus } from "@/store/slices/premiumSlice";
+import { fetchPremiumStatus, invalidatePremiumStatus } from "@/store/slices/premiumSlice";
 
 export default function PremiumPage() {
   const [isPopupOpen, setIsPopupOpen] = useState(false);
@@ -41,10 +41,12 @@ export default function PremiumPage() {
       dispatch(fetchPremiumStatus());
     }
 
-    // Polling background sync (Server-of-Truth)
+    // Polling background sync (Server-of-Truth). Bumped 10s → 30s; the thunk's
+    // `condition` skips when status==="success", so we invalidate first.
     const pollInterval = setInterval(() => {
+      dispatch(invalidatePremiumStatus());
       dispatch(fetchPremiumStatus());
-    }, 10000); // Sync every 10 seconds
+    }, 30000);
 
     return () => clearInterval(pollInterval);
   }, [premiumStatus, dispatch]);

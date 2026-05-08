@@ -41,6 +41,17 @@ export const fetchPremiumStatus = createAsyncThunk(
     const res = await fetch("/api/check-subscription");
     if (!res.ok) throw new Error("Failed to check subscription");
     return res.json();
+  },
+  {
+    // Dedupe: skip if a request is already in flight or we already have data.
+    // Without this, StrictMode + Suspense double-effects fire 2-4 dispatches
+    // before the first one transitions status out of "idle".
+    condition: (_arg, { getState }) => {
+      const state = getState() as { premium: PremiumState };
+      const s = state.premium.status;
+      if (s === "loading" || s === "success") return false;
+      return true;
+    },
   }
 );
 
@@ -54,6 +65,11 @@ const premiumSlice = createSlice({
       state.isPremium = action.payload;
       state.tier = action.payload ? "pro" : "free";
       state.status = "success";
+    },
+    // Reset to "idle" so the next dispatch of fetchPremiumStatus actually fires
+    // (the thunk's `condition` skips when status is "loading" or "success").
+    invalidatePremiumStatus(state) {
+      state.status = "idle";
     },
   },
   extraReducers: (builder) => {
@@ -76,5 +92,5 @@ const premiumSlice = createSlice({
   },
 });
 
-export const { setPremium } = premiumSlice.actions;
+export const { setPremium, invalidatePremiumStatus } = premiumSlice.actions;
 export default premiumSlice.reducer;
