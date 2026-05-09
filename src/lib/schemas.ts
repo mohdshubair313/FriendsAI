@@ -57,6 +57,27 @@ export const generateSchema = z.object({
   // null/omitted on the very first turn → route mints a Conversation
   // and returns the id via SSE for the client to reuse.
   conversationId: z.string().nullable().optional(),
+  // From client-side MediaPipe face landmarks (only when /live_talk has
+  // face detection on). Used to nudge the LLM's reply tone.
+  expression: z
+    .enum(["smiling", "frowning", "surprised", "thinking", "nodding"])
+    .nullable()
+    .optional(),
+  // Persona key from src/lib/chat/personas.ts. Server resolves and falls
+  // back to "friendly" if missing or unknown.
+  persona: z
+    .enum([
+      "friendly",
+      "humorous",
+      "philosophical",
+      "romantic",
+      "motivational",
+      "doctor",
+      "comedian",
+      "senior_dev",
+    ])
+    .nullable()
+    .optional(),
 });
 
 // ─── Payment Schemas ─────────────────────────────────────────────────────────
@@ -85,6 +106,9 @@ export const preferencesSchema = z.object({
     "philosophical",
     "romantic",
     "motivational",
+    "doctor",
+    "comedian",
+    "senior_dev",
   ]),
   contentTaste: z
     .object({

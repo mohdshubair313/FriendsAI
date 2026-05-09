@@ -12,6 +12,7 @@ import { detectIntent, stripImagePrefix } from "@/lib/chat/intentRouter";
 import { streamChat } from "@/lib/chat/streamChat";
 import { generateImage, ImageGenerationError } from "@/lib/chat/generateImage";
 import { errMessage, isAbort } from "@/lib/errors";
+import { saveVoiceSession } from "@/lib/sessions/voiceSession";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -171,14 +172,16 @@ export async function POST(req: NextRequest) {
     log("schema FAIL", parsed.error.issues[0]?.message);
     return jsonError(`Invalid: ${parsed.error.issues[0]?.message}`, 400);
   }
-  const { messages: rawMessages, mood, conversationId } = parsed.data;
+  const { messages: rawMessages, mood, conversationId, expression, persona } = parsed.data;
   const userId = token.id as string;
   const moodKey = mood ?? null;
+  const expressionKey = expression ?? null;
+  const personaKey = persona ?? null;
 
   const messages = toLangChainMessages(rawMessages);
   const latestText = extractLatestText(messages);
   const intent = detectIntent(latestText);
-  log(`intent=${intent} mood=${moodKey ?? "auto"} text="${latestText.slice(0, 60)}"`);
+  log(`intent=${intent} persona=${personaKey ?? "friendly"} mood=${moodKey ?? "auto"} expression=${expressionKey ?? "n/a"} text="${latestText.slice(0, 60)}"`);
 
   // ─── Conversation: load existing or auto-mint ──────────────────────────────
   let resolvedConversationId: string | null = conversationId ?? null;
@@ -275,6 +278,10 @@ export async function POST(req: NextRequest) {
           });
           writer({ type: "done" });
           log(`image done — total ${ms()}`);
+          void saveVoiceSession(userId, {
+            conversationId: resolvedConversationId,
+            persona: personaKey,
+          });
           return;
         }
 
@@ -285,6 +292,8 @@ export async function POST(req: NextRequest) {
           acc = await streamChat({
             messages,
             mood: moodKey,
+            expression: expressionKey,
+            persona: personaKey,
             signal: req.signal,
             writer,
           });
@@ -317,6 +326,15 @@ export async function POST(req: NextRequest) {
 
         writer({ type: "done" });
         log(`chat done — total ${ms()}`);
+
+        // Warm the voice-session cache so a reconnect picks up the same
+        // persona/conversation/locale/expression instantly. Fire-and-forget;
+        // failure here doesn't affect the user-visible response.
+        void saveVoiceSession(userId, {
+          conversationId: resolvedConversationId,
+          persona: personaKey,
+          expression: expressionKey,
+        });
       } catch (err) {
         if (req.signal.aborted || isAbort(err)) return;
         const message = errMessage(err);

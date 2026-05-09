@@ -3,15 +3,20 @@ import { getToken } from "next-auth/jwt";
 import { z } from "zod";
 import { getEntitlement } from "@/lib/entitlement";
 import { synthesizeSpeech, CloudflareVoiceError } from "@/lib/voice/cloudflareSpeech";
+import { proxySynthesize, isProxyConfigured } from "@/lib/voice/proxyClient";
+import { ttsLangFor } from "@/lib/locale/catalog";
 import { errMessage } from "@/lib/errors";
 
 export const runtime = "nodejs";
 
 const MAX_TEXT_LENGTH = 1500;
 
+// `lang` accepts BCP-47 ("hi-IN") OR the legacy MeloTTS literal ("en").
+// Voice-service router maps BCP-47 to provider-specific codes; for the
+// direct-Cloudflare fallback we map via ttsLangFor() below.
 const ttsSchema = z.object({
   text: z.string().min(1).max(MAX_TEXT_LENGTH),
-  lang: z.enum(["en", "es", "fr", "zh", "jp", "kr"]).optional(),
+  lang: z.string().min(2).max(10).optional(),
 });
 
 /**
@@ -54,8 +59,32 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  const requestedLang = parsed.data.lang ?? "en-US";
+
+  // Proxy-first when configured; null return signals "fall back to direct".
+  if (isProxyConfigured()) {
+    const proxied = await proxySynthesize(parsed.data.text, requestedLang, {
+      userId: token.id as string,
+      tier: entitlement.tier,
+    });
+    if (proxied !== null) {
+      console.log(`[voice:synthesize] proxied bytes=${proxied.length}`);
+      return new Response(new Uint8Array(proxied), {
+        status: 200,
+        headers: {
+          "Content-Type": "audio/mpeg",
+          "Content-Length": proxied.length.toString(),
+          "Cache-Control": "no-store",
+        },
+      });
+    }
+    console.warn("[voice:synthesize] proxy unavailable — falling back to direct Cloudflare");
+  }
+
   try {
-    const audio = await synthesizeSpeech(parsed.data.text, parsed.data.lang ?? "en");
+    // Direct CF fallback: MeloTTS only speaks en/es/fr/zh/jp/kr — Indian
+    // langs degrade to English voice automatically via ttsLangFor().
+    const audio = await synthesizeSpeech(parsed.data.text, ttsLangFor(requestedLang));
     return new Response(new Uint8Array(audio), {
       status: 200,
       headers: {

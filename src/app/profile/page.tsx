@@ -6,13 +6,12 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import { motion } from "framer-motion";
+import LocaleSelector from "@/components/profile/LocaleSelector";
 import {
   Crown,
   Sparkles,
   Mail,
   User as UserIcon,
-  Globe,
-  Languages,
   ImageIcon,
   Mic,
   Bot,
@@ -269,33 +268,14 @@ export default function ProfilePage() {
         </Card>
 
         {/* Locale + Preferences */}
-        {(user.locale || user.preferences) && (
-          <Card title="Preferences">
+        <Card title="Preferences">
+          <div className="space-y-5">
+            {/* Editable country + language picker — writes through to Redux + DB */}
+            <LocaleSelector />
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3">
-              {user.locale && (
-                <>
-                  <Field
-                    label="Country"
-                    value={
-                      <span className="inline-flex items-center gap-1.5">
-                        <Globe className="size-3.5 text-zinc-500" />
-                        {user.locale.country ?? "—"}
-                      </span>
-                    }
-                  />
-                  <Field
-                    label="Language"
-                    value={
-                      <span className="inline-flex items-center gap-1.5">
-                        <Languages className="size-3.5 text-zinc-500" />
-                        {user.locale.primaryLanguage ?? "—"}
-                      </span>
-                    }
-                  />
-                  {user.locale.timezone && <Field label="Timezone" value={user.locale.timezone} />}
-                  {user.locale.city && <Field label="City" value={user.locale.city} />}
-                </>
-              )}
+              {user.locale?.timezone && <Field label="Timezone" value={user.locale.timezone} />}
+              {user.locale?.city && <Field label="City" value={user.locale.city} />}
               {user.preferences?.buddyPersona && (
                 <Field label="Default persona" value={user.preferences.buddyPersona} />
               )}
@@ -303,8 +283,8 @@ export default function ProfilePage() {
                 <Field label="TTS voice" value={user.preferences.ttsVoiceId} />
               )}
             </div>
-          </Card>
-        )}
+          </div>
+        </Card>
 
         {/* Quick actions */}
         <Card title="Account actions">
@@ -378,7 +358,7 @@ function Field({
   return (
     <div>
       <p className="text-[11px] text-zinc-500 mb-0.5">{label}</p>
-      <p
+      <div
         className={cn(
           "text-sm",
           highlight ? "text-amber-300 font-semibold" : "text-zinc-200",
@@ -386,7 +366,7 @@ function Field({
         )}
       >
         {value}
-      </p>
+      </div>
     </div>
   );
 }

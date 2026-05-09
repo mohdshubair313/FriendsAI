@@ -14,6 +14,7 @@ import MessageList from "@/components/chatComponents/MessageList";
 import EmptyState from "@/components/chatComponents/EmptyState";
 import VoiceMode from "@/components/chatComponents/VoiceMode";
 import { MoodChips } from "@/components/chatComponents/MoodChips";
+import PersonaSelector from "@/components/chatComponents/PersonaSelector";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { fetchPremiumStatus } from "@/store/slices/premiumSlice";
 import { sounds } from "@/lib/sounds";
@@ -80,6 +81,7 @@ function ChatPageInner() {
   const { status: sessionStatus } = useSession();
   const dispatch = useAppDispatch();
   const selectedMood = useAppSelector((s) => s.chat.selectedMood);
+  const selectedPersona = useAppSelector((s) => s.persona.selected);
   const isPremium = useAppSelector((s) => s.premium.isPremium);
   const premiumStatus = useAppSelector((s) => s.premium.status);
 
@@ -204,6 +206,7 @@ function ChatPageInner() {
           body: JSON.stringify({
             messages: [userMessage],
             mood: selectedMood,
+            persona: selectedPersona,
             conversationId: conversationIdRef.current,
           }),
           signal: ac.signal,
@@ -324,7 +327,7 @@ function ChatPageInner() {
         abortRef.current = null;
       }
     },
-    [selectedMood]
+    [selectedMood, selectedPersona]
   );
 
   const handleSubmitCallback = useCallback(
@@ -393,6 +396,7 @@ function ChatPageInner() {
         {mainContent}
       </main>
 
+      <PersonaSelector />
       <MoodChips />
 
       <ChatInput

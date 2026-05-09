@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
 import { getEntitlement } from "@/lib/entitlement";
 import { transcribeAudio, CloudflareVoiceError } from "@/lib/voice/cloudflareSpeech";
+import { proxyTranscribe, isProxyConfigured } from "@/lib/voice/proxyClient";
+import { sttLangFor } from "@/lib/locale/catalog";
 import { errMessage } from "@/lib/errors";
 
 export const runtime = "nodejs";
@@ -35,6 +37,10 @@ export async function POST(req: NextRequest) {
   }
 
   let audioBuffer: Buffer;
+  // Full BCP-47 (e.g. "hi-IN"). Voice-service router uses this to pick
+  // Sarvam vs Cloudflare. Direct-Cloudflare fallback path converts to
+  // Whisper's 2-letter form via sttLangFor().
+  let language = "en-US";
   try {
     const formData = await req.formData();
     const file = formData.get("audio");
@@ -48,6 +54,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Audio file too large (max 25 MB)" }, { status: 413 });
     }
     audioBuffer = Buffer.from(await file.arrayBuffer());
+
+    const lang = formData.get("language");
+    if (typeof lang === "string" && lang.length >= 2) {
+      language = lang;
+    }
   } catch (err) {
     return NextResponse.json(
       { error: `Could not read audio: ${errMessage(err)}` },
@@ -55,8 +66,22 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // Proxy-first when configured; null return signals "fall back to direct".
+  if (isProxyConfigured()) {
+    const proxied = await proxyTranscribe(audioBuffer, language, {
+      userId: token.id as string,
+      tier: entitlement.tier,
+    });
+    if (proxied !== null) {
+      console.log(`[voice:transcribe] proxied chars=${proxied.length}`);
+      return NextResponse.json({ text: proxied });
+    }
+    console.warn("[voice:transcribe] proxy unavailable — falling back to direct Cloudflare");
+  }
+
   try {
-    const text = await transcribeAudio(audioBuffer);
+    // Direct-CF fallback: Whisper wants the 2-letter code, not BCP-47.
+    const text = await transcribeAudio(audioBuffer, sttLangFor(language));
     return NextResponse.json({ text });
   } catch (err) {
     const code = err instanceof CloudflareVoiceError ? err.code : "unknown";

@@ -5,9 +5,11 @@ export const dynamic = "force-dynamic";
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { useAppSelector } from "@/store/hooks";
-import LiveTalkOverlay from "@/components/chatComponents/LiveTalkOverlay";
+import { useAppSelector, useAppDispatch } from "@/store/hooks";
+import { loadLocale } from "@/store/slices/localeSlice";
 import LiveTalkTeaser from "@/components/chatComponents/LiveTalkTeaser";
+import MeetView from "@/components/livetalk/MeetView";
+import { useFaceLandmarks } from "@/lib/face/useFaceLandmarks";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
 
@@ -46,10 +48,43 @@ const TTS_MIN_BATCH_CHARS = 30;
 
 type VoicePhase = "idle" | "listening" | "transcribing" | "thinking" | "speaking";
 
-function useLiveAudio() {
+export interface TranscriptTurn {
+  id: string;
+  role: "user" | "ai";
+  content: string;
+  ts: number; // ms epoch
+}
+
+interface UseLiveAudioOptions {
+  /** When true, getUserMedia requests video too (powers MediaPipe face detection). */
+  cameraEnabled: boolean;
+  /** Read by sendTranscript to attach the latest face expression to the orchestrate call. */
+  expressionRef?: React.RefObject<string>;
+  /** Read by sendTranscript to tell the LLM which persona to roleplay. */
+  personaRef?: React.RefObject<string>;
+  /** Full BCP-47 language code (e.g. "hi-IN"). Server routes to Sarvam vs
+   *  Cloudflare based on this. */
+  languageRef?: React.RefObject<string>;
+}
+
+function useLiveAudio({
+  cameraEnabled,
+  expressionRef,
+  personaRef,
+  languageRef,
+}: UseLiveAudioOptions) {
   const [phase, setPhase] = useState<VoicePhase>("idle");
   const [audioLevel, setAudioLevel] = useState(0);          // 0-100
   const [outputAudioLevel, setOutputAudioLevel] = useState(0); // 0-100, synthetic envelope
+  const [userTranscript, setUserTranscript] = useState("");      // last user STT
+  const [aiResponse, setAiResponse] = useState("");              // streaming AI text
+  // Full chat history of the live session (in-memory only — server already
+  // saves messages via /api/orchestrate's Mongo writes, this is just for
+  // the SidePanel ChatLog).
+  const [transcripts, setTranscripts] = useState<TranscriptTurn[]>([]);
+  // The active video stream (when cameraEnabled). Exposed so the parent can
+  // hand it to useFaceLandmarks for facial expression detection.
+  const [videoStream, setVideoStream] = useState<MediaStream | null>(null);
 
   // Long-lived browser primitives
   const streamRef = useRef<MediaStream | null>(null);
@@ -122,7 +157,7 @@ function useLiveAudio() {
         const res = await fetch("/api/voice/synthesize", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text: trimmed }),
+          body: JSON.stringify({ text: trimmed, lang: languageRef?.current ?? "en-US" }),
         });
         if (!res.ok) {
           const reason = await res.json().catch(() => null);
@@ -149,7 +184,7 @@ function useLiveAudio() {
         console.error("[live] TTS fetch failed:", err);
       }
     },
-    [playNextTts]
+    [playNextTts, languageRef]
   );
 
   const flushTtsBuffer = useCallback(() => {
@@ -161,6 +196,7 @@ function useLiveAudio() {
   // Token from the LLM stream → batched into sentence-sized TTS calls.
   const onChatToken = useCallback(
     (chunk: string) => {
+      setAiResponse((prev) => prev + chunk);
       ttsBufferRef.current += chunk;
       const buf = ttsBufferRef.current;
       // Match a sentence ending at a terminal punctuation mark.
@@ -182,6 +218,12 @@ function useLiveAudio() {
       const ac = new AbortController();
       orchestrateAbortRef.current = ac;
 
+      setAiResponse(""); // reset for the new turn
+      // Snapshot the AI accumulator so we can push the full reply once
+      // streaming completes. We can't read state inside the loop reliably.
+      let acc = "";
+      const expression = expressionRef?.current ?? null;
+      const persona = personaRef?.current ?? null;
       try {
         const res = await fetch("/api/orchestrate", {
           method: "POST",
@@ -190,6 +232,10 @@ function useLiveAudio() {
             messages: [{ role: "user", content: transcript }],
             mood: null,
             conversationId: conversationIdRef.current,
+            // From MediaPipe (when face detection is on). LLM uses it to
+            // tailor reactions: "you look surprised — what's up?"
+            expression: expression && expression !== "neutral" ? expression : null,
+            persona,
           }),
           signal: ac.signal,
         });
@@ -216,6 +262,7 @@ function useLiveAudio() {
               if (evt.type === "conversation" && evt.id) {
                 conversationIdRef.current = evt.id;
               } else if (evt.type === "token" && evt.content) {
+                acc += evt.content;
                 onChatToken(evt.content);
               } else if (evt.type === "done" || evt.type === "aborted") {
                 flushTtsBuffer();
@@ -224,6 +271,15 @@ function useLiveAudio() {
           }
         }
         flushTtsBuffer();
+        // Push the completed AI turn to history. Empty replies (rare) are
+        // still pushed so the timeline doesn't lie.
+        const trimmed = acc.trim();
+        if (trimmed) {
+          setTranscripts((prev) => [
+            ...prev,
+            { id: `ai-${Date.now()}`, role: "ai", content: trimmed, ts: Date.now() },
+          ]);
+        }
       } catch (err) {
         if ((err as { name?: string })?.name === "AbortError") return;
         console.error("[live] orchestrate failed:", err);
@@ -233,17 +289,25 @@ function useLiveAudio() {
         orchestrateAbortRef.current = null;
       }
     },
-    [onChatToken, flushTtsBuffer]
+    [onChatToken, flushTtsBuffer, expressionRef, personaRef]
   );
 
   // ─── Whisper transcription ────────────────────────────────────────────
   const transcribeAndReply = useCallback(
     async (audioBlob: Blob) => {
       if (stoppedRef.current) return;
+      // Guard tiny / empty blobs — they trigger CF "Failed to decode" 3030
+      // and Next.js "Failed to parse FormData" 400. ~1 KB is the minimum
+      // a webm/opus header + a few frames of audio comes out to.
+      if (audioBlob.size < 1024) {
+        setPhase("listening");
+        return;
+      }
       setPhase("transcribing");
       try {
         const formData = new FormData();
         formData.append("audio", audioBlob, "utterance.webm");
+        formData.append("language", languageRef?.current ?? "en-US");
         const res = await fetch("/api/voice/transcribe", { method: "POST", body: formData });
         if (!res.ok) {
           const err = await res.json().catch(() => null);
@@ -256,6 +320,11 @@ function useLiveAudio() {
           setPhase("listening");
           return;
         }
+        setUserTranscript(text);
+        setTranscripts((prev) => [
+          ...prev,
+          { id: `user-${Date.now()}`, role: "user", content: text, ts: Date.now() },
+        ]);
         await sendTranscript(text);
       } catch (err) {
         console.error("[live] transcribe failed:", err);
@@ -263,10 +332,59 @@ function useLiveAudio() {
         setPhase("listening");
       }
     },
-    [sendTranscript]
+    [sendTranscript, languageRef]
   );
 
   // ─── Mic capture lifecycle ────────────────────────────────────────────
+
+  // Build a fresh MediaRecorder bound to the current stream. We create one
+  // per utterance because reusing the same instance after stop()→start()
+  // produces blobs without the WebM EBML init segment, which Cloudflare
+  // Whisper rejects with "Failed to decode audio file" (code 3030).
+  const buildRecorder = useCallback((stream: MediaStream): MediaRecorder | null => {
+    if (!stream.active) {
+      console.warn("[live] buildRecorder: stream is not active, skipping");
+      return null;
+    }
+
+    // Build an audio-ONLY MediaStream for the recorder. When camera is on,
+    // the parent stream contains both audio + video tracks; passing both to
+    // MediaRecorder with an audio/* mimeType throws "NotSupportedError" on
+    // most Chromium builds. We share the underlying audio MediaStreamTrack
+    // with the analyser (no clone), so VAD + recording stay in sync.
+    const audioTracks = stream.getAudioTracks();
+    if (audioTracks.length === 0) {
+      console.warn("[live] buildRecorder: no audio tracks on stream");
+      return null;
+    }
+    const audioOnly = new MediaStream(audioTracks);
+
+    // Detect the first codec the browser actually supports. Older Safari
+    // versions throw NotSupportedError if you pass any options object with
+    // an unsupported mimeType, so we prefer "no options" over "guess".
+    let mimeType = "";
+    try {
+      if (MediaRecorder.isTypeSupported("audio/webm;codecs=opus")) {
+        mimeType = "audio/webm;codecs=opus";
+      } else if (MediaRecorder.isTypeSupported("audio/webm")) {
+        mimeType = "audio/webm";
+      } else if (MediaRecorder.isTypeSupported("audio/mp4")) {
+        mimeType = "audio/mp4";
+      }
+    } catch { /* isTypeSupported can throw on locked-down browsers */ }
+
+    let recorder: MediaRecorder;
+    try {
+      recorder = new MediaRecorder(audioOnly, mimeType ? { mimeType } : undefined);
+    } catch (err) {
+      console.error("[live] MediaRecorder ctor failed:", err);
+      return null;
+    }
+    recorder.ondataavailable = (e) => {
+      if (e.data && e.data.size > 0) recordedChunksRef.current.push(e.data);
+    };
+    return recorder;
+  }, []);
 
   // Stops the current recording and ships the chunks off for transcription.
   const finalizeUtterance = useCallback(() => {
@@ -279,7 +397,8 @@ function useLiveAudio() {
     silenceStartRef.current = 0;
 
     // MediaRecorder.stop() flushes a final dataavailable event. We collect
-    // the chunks in onstop so we can package them and (maybe) restart.
+    // the chunks in onstop so we can package them and spin up a fresh
+    // recorder for the next utterance.
     recorder.onstop = () => {
       const dur = startedAt ? Date.now() - startedAt : 0;
       const chunks = recordedChunksRef.current;
@@ -291,13 +410,25 @@ function useLiveAudio() {
         // Too short — discard and resume listening.
         setPhase("listening");
       }
-      // Restart the recorder so we're ready for the next utterance.
-      try {
-        if (!stoppedRef.current) recorder.start(200);
-      } catch { /* already started */ }
+      const stream = streamRef.current;
+      if (stream && stream.active && !stoppedRef.current) {
+        const next = buildRecorder(stream);
+        recorderRef.current = next;
+        if (next) {
+          try {
+            next.start(200);
+          } catch (err) {
+            console.warn("[live] recorder.start failed:", err);
+          }
+        }
+      }
     };
-    recorder.stop();
-  }, [transcribeAndReply]);
+    try {
+      recorder.stop();
+    } catch (err) {
+      console.warn("[live] recorder.stop failed:", err);
+    }
+  }, [transcribeAndReply, buildRecorder]);
 
   // ─── Audio analyser tick (also drives input level) ────────────────────
   const tick = useCallback(() => {
@@ -340,14 +471,35 @@ function useLiveAudio() {
   const start = useCallback(async () => {
     stoppedRef.current = false;
     try {
+      // Constraints tuned for voice-grade audio + cheap face-detection video.
+      // sampleRate is a hint only — Chrome may ignore it but stating 44100
+      // avoids "NotSupportedError" on some Windows audio drivers that
+      // default to weird rates (96 kHz, 192 kHz, etc.).
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
           noiseSuppression: true,
           autoGainControl: true,
+          sampleRate: 44100,
+          channelCount: 1,
         },
+        video: cameraEnabled
+          ? { width: { ideal: 320 }, height: { ideal: 240 }, frameRate: { ideal: 15 } }
+          : false,
       });
+      // Browser can hand us a stream that's "inactive" if the user revoked
+      // permission between the prompt and the resolve — abort cleanly.
+      if (!stream.active || stream.getAudioTracks().length === 0) {
+        stream.getTracks().forEach((t) => { try { t.stop(); } catch { /* ignore */ } });
+        throw new Error("Microphone stream is not active");
+      }
       streamRef.current = stream;
+      // If video tracks exist, surface them so the face hook can attach.
+      if (stream.getVideoTracks().length > 0) {
+        setVideoStream(stream);
+      } else {
+        setVideoStream(null);
+      }
 
       const Ctor = (window.AudioContext ||
         (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext) as typeof AudioContext;
@@ -359,23 +511,19 @@ function useLiveAudio() {
       audioCtxRef.current = ctx;
       analyserRef.current = analyser;
 
-      // Pick a mimeType the browser actually supports. Chrome → opus,
-      // Safari → mp4. Whisper handles both.
-      const mimeType =
-        MediaRecorder.isTypeSupported("audio/webm;codecs=opus") ? "audio/webm;codecs=opus" :
-        MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" :
-        MediaRecorder.isTypeSupported("audio/mp4") ? "audio/mp4" :
-        "";
-
-      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
-      recorder.ondataavailable = (e) => {
-        if (e.data && e.data.size > 0) recordedChunksRef.current.push(e.data);
-      };
-      // First-pass onstop is overwritten in finalizeUtterance to handle the
-      // captured chunks. Default no-op so the recorder is happy on init.
+      // First recorder. finalizeUtterance overwrites onstop and swaps in a
+      // fresh recorder per utterance (see buildRecorder for why).
+      const recorder = buildRecorder(stream);
+      if (!recorder) {
+        throw new Error("MediaRecorder unavailable in this browser");
+      }
       recorder.onstop = () => {};
       recorderRef.current = recorder;
-      recorder.start(200); // 200ms chunks
+      try {
+        recorder.start(200); // 200ms chunks
+      } catch (err) {
+        throw new Error(`MediaRecorder.start failed: ${(err as Error)?.message ?? err}`);
+      }
 
       setPhase("listening");
       tick();
@@ -388,20 +536,38 @@ function useLiveAudio() {
       );
       setPhase("idle");
     }
-  }, [tick]);
+  }, [tick, buildRecorder, cameraEnabled]);
 
   const stop = useCallback(() => {
     stoppedRef.current = true;
-    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    if (rafRef.current !== null) {
+      try { cancelAnimationFrame(rafRef.current); } catch { /* ignore */ }
+    }
     rafRef.current = null;
 
-    try { recorderRef.current?.stop(); } catch { /* not recording */ }
+    if (recorderRef.current) {
+      try {
+        if (recorderRef.current.state !== "inactive") recorderRef.current.stop();
+      } catch { /* not recording */ }
+    }
     recorderRef.current = null;
 
-    streamRef.current?.getTracks().forEach((t) => t.stop());
+    if (streamRef.current) {
+      try {
+        streamRef.current.getTracks().forEach((t) => {
+          try { t.stop(); } catch { /* track already stopped */ }
+        });
+      } catch { /* stream torn down */ }
+    }
     streamRef.current = null;
+    setVideoStream(null);
 
-    audioCtxRef.current?.close().catch(() => {});
+    if (audioCtxRef.current) {
+      try {
+        // close() rejects if context is already closed — swallow.
+        audioCtxRef.current.close().catch(() => {});
+      } catch { /* ignore */ }
+    }
     audioCtxRef.current = null;
     analyserRef.current = null;
 
@@ -471,10 +637,15 @@ function useLiveAudio() {
   }, []);
 
   return {
+    phase,
     isStreaming: phase !== "idle",
     isModelSpeaking: phase === "speaking",
     audioLevel,
     outputAudioLevel,
+    userTranscript,
+    aiResponse,
+    transcripts,
+    videoStream,
     interrupt,
     stop,
   };
@@ -529,20 +700,110 @@ export default function LiveTalkPage() {
 }
 
 function LiveTalkSession({ onClose }: { onClose: () => void }) {
-  const { isStreaming, isModelSpeaking, audioLevel, outputAudioLevel, interrupt, stop } = useLiveAudio();
+  // Face detection toggle. Default: on for Pro (which is the only tier that
+  // can reach this page anyway). Persisted to localStorage so the user's
+  // privacy choice survives refresh.
+  const [faceEnabled, setFaceEnabled] = useState<boolean>(() => {
+    if (typeof window === "undefined") return true;
+    const stored = window.localStorage.getItem("livetalk:face");
+    return stored === null ? true : stored === "1";
+  });
+
+  // Latest expression — read by useLiveAudio when it sends an orchestrate call.
+  const expressionRef = useRef<string>("neutral");
+
+  // Active persona — read from Redux + mirrored into a ref so useLiveAudio's
+  // sendTranscript closure always sees the current value without re-creating.
+  const selectedPersona = useAppSelector((s) => s.persona.selected);
+  const personaRef = useRef<string>(selectedPersona);
+  useEffect(() => {
+    personaRef.current = selectedPersona;
+  }, [selectedPersona]);
+
+  // Locale — full BCP-47 (e.g. "hi-IN") sent to the server, which routes
+  // Sarvam vs Cloudflare per language. Mirrored into a ref so STT/TTS
+  // closures see the latest value mid-session.
+  const userLocale = useAppSelector((s) => s.locale);
+  const languageRef = useRef<string>(userLocale.primaryLanguage);
+  useEffect(() => {
+    languageRef.current = userLocale.primaryLanguage;
+  }, [userLocale.primaryLanguage]);
+
+  // Trigger lazy-load of locale into Redux on first mount.
+  const dispatch = useAppDispatch();
+  useEffect(() => {
+    if (userLocale.status === "idle") void dispatch(loadLocale());
+  }, [userLocale.status, dispatch]);
+
+  const {
+    phase,
+    isModelSpeaking,
+    audioLevel,
+    outputAudioLevel,
+    userTranscript,
+    aiResponse,
+    transcripts,
+    videoStream,
+    interrupt,
+    stop,
+  } = useLiveAudio({
+    cameraEnabled: faceEnabled,
+    expressionRef,
+    personaRef,
+    languageRef,
+  });
+
+  const face = useFaceLandmarks({
+    enabled: faceEnabled && !!videoStream,
+    videoStream,
+  });
+
+  // Keep our local ref in sync with the smoothed value from the face hook.
+  useEffect(() => {
+    expressionRef.current = face.expression;
+  }, [face.expression]);
+
+  const handleToggleFace = (next: boolean) => {
+    setFaceEnabled(next);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("livetalk:face", next ? "1" : "0");
+    }
+  };
 
   return (
-    <LiveTalkOverlay
-      isStreaming={isStreaming}
-      isModelSpeaking={isModelSpeaking}
-      audioLevel={audioLevel}
-      outputAudioLevel={outputAudioLevel}
-      onClose={() => {
-        stop();
-        onClose();
-      }}
-      onInterrupt={interrupt}
-      emotion="calm"
-    />
+    <>
+      {/* Hidden video element — MediaPipe reads frames from this. Mounted
+          only when face detection is on so we don't keep a video track open
+          unnecessarily. */}
+      {faceEnabled && (
+        <video
+          ref={face.videoRef as React.RefObject<HTMLVideoElement>}
+          autoPlay
+          muted
+          playsInline
+          className="absolute -left-[9999px] size-px opacity-0 pointer-events-none"
+        />
+      )}
+
+      <MeetView
+        persona={selectedPersona}
+        phase={phase}
+        isModelSpeaking={isModelSpeaking}
+        audioLevel={audioLevel}
+        outputAudioLevel={outputAudioLevel}
+        expression={face.expression}
+        videoStream={videoStream}
+        userTranscript={userTranscript}
+        aiResponse={aiResponse}
+        transcripts={transcripts}
+        cameraEnabled={faceEnabled}
+        onToggleCamera={handleToggleFace}
+        onClose={() => {
+          stop();
+          onClose();
+        }}
+        onInterrupt={interrupt}
+      />
+    </>
   );
 }

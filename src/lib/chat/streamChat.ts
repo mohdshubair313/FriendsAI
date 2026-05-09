@@ -26,6 +26,10 @@ export type StreamWriter = (chunk: { type: string; content?: string }) => void;
 export interface StreamChatOptions {
   messages: BaseMessage[];
   mood: string | null;          // user-selected mood, may be null
+  /** Detected facial expression from MediaPipe (live talk only). */
+  expression?: string | null;
+  /** Persona key from src/lib/chat/personas.ts. */
+  persona?: string | null;
   signal?: AbortSignal;          // tied to request signal for stop button
   writer: StreamWriter;          // pushes `{ type: "token", content }` events
 }
@@ -201,7 +205,7 @@ async function tryOneModel(
  * actually produces tokens. Returns the full assistant text.
  */
 export async function streamChat(opts: StreamChatOptions): Promise<string> {
-  const { messages, mood, signal, writer } = opts;
+  const { messages, mood, expression, persona, signal, writer } = opts;
   const t0 = Date.now();
 
   const apiKey = getProviderApiKey("openrouter");
@@ -211,9 +215,13 @@ export async function streamChat(opts: StreamChatOptions): Promise<string> {
     return FALLBACK_REPLY;
   }
 
-  const systemPrompt = new SystemMessage({ content: buildChatSystemPrompt(mood) });
+  const systemPrompt = new SystemMessage({
+    content: buildChatSystemPrompt({ mood, persona, expression }),
+  });
   const llmInput = [systemPrompt, ...messages];
-  console.log(`[streamChat] start mood=${mood ?? "auto"} msgs=${messages.length} ${ms(t0)}`);
+  console.log(
+    `[streamChat] start persona=${persona ?? "friendly"} mood=${mood ?? "auto"} expression=${expression ?? "n/a"} msgs=${messages.length} ${ms(t0)}`
+  );
 
   let lastError: unknown = null;
   for (let i = 0; i < CHAT_MODEL_CHAIN.length; i++) {

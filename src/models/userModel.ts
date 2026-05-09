@@ -26,7 +26,10 @@ export type BuddyPersona =
   | "humorous"
   | "philosophical"
   | "romantic"
-  | "motivational";
+  | "motivational"
+  | "doctor"
+  | "comedian"
+  | "senior_dev";
 
 export interface IUserPreferences {
   buddyPersona: BuddyPersona;
@@ -86,7 +89,16 @@ const preferencesSubSchema = new Schema<IUserPreferences>(
   {
     buddyPersona: {
       type: String,
-      enum: ["friendly", "humorous", "philosophical", "romantic", "motivational"],
+      enum: [
+        "friendly",
+        "humorous",
+        "philosophical",
+        "romantic",
+        "motivational",
+        "doctor",
+        "comedian",
+        "senior_dev",
+      ],
       default: "friendly",
     },
     contentTaste: {

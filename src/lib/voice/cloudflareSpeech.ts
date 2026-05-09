@@ -94,14 +94,29 @@ async function cfRequest(
 /**
  * Transcribe an audio buffer (webm/mp3/wav/m4a) using Whisper.
  *
- * Cloudflare's Whisper endpoint accepts the raw audio bytes as the request
- * body. Response is JSON: { result: { text: "..." } }.
+ * The `whisper-large-v3-turbo` model expects a JSON body with the audio
+ * field as a base64 string — NOT raw octet-stream bytes (that contract is
+ * the older `@cf/openai/whisper` model). Sending bytes returns
+ * `AiError: Invalid input (code 8001)`.
+ *
+ * Response shape: { result: { text: "...", transcription_info, ... } }.
  *
  * @param buffer  raw audio bytes from MediaRecorder or upload
  * @returns trimmed transcript (may be empty string if audio had no speech)
  */
-export async function transcribeAudio(buffer: Buffer): Promise<string> {
-  const res = await cfRequest(WHISPER_MODEL, buffer, "application/octet-stream", STT_TIMEOUT_MS);
+export async function transcribeAudio(buffer: Buffer, language = "en"): Promise<string> {
+  // language: ISO-639-1 code helps Whisper avoid auto-detecting wrong lang
+  //           (huge accuracy boost for short utterances).
+  // vad_filter: drop pure-silence chunks server-side too, in case our
+  //             client VAD let some noise through.
+  // task: "transcribe" (vs "translate" which forces English output).
+  const body = JSON.stringify({
+    audio: buffer.toString("base64"),
+    language,
+    task: "transcribe",
+    vad_filter: true,
+  });
+  const res = await cfRequest(WHISPER_MODEL, body, "application/json", STT_TIMEOUT_MS);
   let json: { result?: { text?: string } };
   try {
     json = await res.json();
