@@ -13,6 +13,7 @@ import {
   Orbit,
   User as UserIcon,
   Sparkles,
+  Settings2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import PersonaSelector from "@/components/chatComponents/PersonaSelector";
@@ -28,6 +29,8 @@ interface BottomBarProps {
   onToggleStage: () => void;
   sidePanelOpen: boolean;
   onToggleSidePanel: () => void;
+  /** Opens the onboarding wizard (country/language/voice/role re-pick). */
+  onReconfigure?: () => void;
   onLeave: () => void;
 }
 
@@ -44,6 +47,7 @@ export default function BottomBar({
   onToggleStage,
   sidePanelOpen,
   onToggleSidePanel,
+  onReconfigure,
   onLeave,
 }: BottomBarProps) {
   const [showPersona, setShowPersona] = useState(false);
@@ -141,6 +145,14 @@ export default function BottomBar({
           icon={Users}
           onClick={onToggleSidePanel}
         />
+
+        {onReconfigure && (
+          <ControlButton
+            label="Reconfigure (country / language / role)"
+            icon={Settings2}
+            onClick={onReconfigure}
+          />
+        )}
 
         <Divider />
 

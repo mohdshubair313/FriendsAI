@@ -31,6 +31,9 @@ interface StageGridProps {
   aiResponse: string;
   /** Phase label for status pill (Listening / Thinking / etc). */
   phaseLabel: string;
+  /** If the RPM avatar GLB fails to load, MeetView gets pinged so it can
+   *  flip back to sphere mode silently. */
+  onAvatarUnavailable?: () => void;
 }
 
 /**
@@ -48,6 +51,7 @@ export default function StageGrid({
   userTranscript,
   aiResponse,
   phaseLabel,
+  onAvatarUnavailable,
 }: StageGridProps) {
   const personaCard = PERSONAS[persona];
   const personaGlow: PersonaGlow = (personaCard?.glow ?? "indigo") as PersonaGlow;
@@ -72,6 +76,7 @@ export default function StageGrid({
               expression={expression}
               personaGlow={personaGlow}
               avatarUrl={personaCard?.avatarUrl}
+              onAvatarUnavailable={onAvatarUnavailable}
             />
           </div>
         ) : (

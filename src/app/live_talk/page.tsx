@@ -9,6 +9,8 @@ import { useAppSelector, useAppDispatch } from "@/store/hooks";
 import { loadLocale } from "@/store/slices/localeSlice";
 import LiveTalkTeaser from "@/components/chatComponents/LiveTalkTeaser";
 import MeetView from "@/components/livetalk/MeetView";
+import OnboardingWizard from "@/components/livetalk/OnboardingWizard";
+import { PERSONAS } from "@/lib/chat/personas";
 import { useFaceLandmarks } from "@/lib/face/useFaceLandmarks";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
@@ -34,12 +36,22 @@ import { motion } from "framer-motion";
 
 // ─── VAD tuning constants ────────────────────────────────────────────────────
 // Average byte frequency (0-255) above which we consider mic input "speech".
-const VAD_SPEECH_THRESHOLD = 14;
+// Raised 14 → 22: breathing + mouse-click noise was triggering false positives
+// → 1-2 frame utterances → Whisper hallucinations like "कर दो दो दो दो".
+const VAD_SPEECH_THRESHOLD = 22;
 // Average amplitude must drop below threshold for this long for us to call
 // the utterance "ended" and stop the recorder.
 const VAD_SILENCE_DURATION_MS = 1200;
-// Discard captured audio shorter than this (likely just a noise spike).
-const MIN_UTTERANCE_MS = 350;
+// Discard captured audio shorter than this. Bumped 350 → 700ms because:
+//   - Whisper Large v3 Turbo hallucinates repetitive Hindi tokens on very
+//     short clips (e.g. "दो दो दो दो")
+//   - WebM/Opus needs ~200-300ms to flush a valid EBML init segment;
+//     finalizing before that yields code 3030 "Failed to decode audio file"
+const MIN_UTTERANCE_MS = 700;
+// Minimum recorder uptime before VAD can finalize it. Without this, a fast
+// retrigger immediately after the previous utterance's onstop ships a blob
+// with no WebM init segment → Cloudflare returns code 3030.
+const MIN_RECORDER_UPTIME_MS = 300;
 // Flush a TTS request once buffered text ends with terminal punctuation
 // AND has at least this many characters (avoids tiny "Ok." clips).
 const TTS_MIN_BATCH_CHARS = 30;
@@ -82,6 +94,12 @@ function useLiveAudio({
   // saves messages via /api/orchestrate's Mongo writes, this is just for
   // the SidePanel ChatLog).
   const [transcripts, setTranscripts] = useState<TranscriptTurn[]>([]);
+  // Mirror as a ref so sendTranscript (a stable useCallback) can read the
+  // latest history without re-creating itself on every turn.
+  const transcriptsRef = useRef<TranscriptTurn[]>([]);
+  useEffect(() => {
+    transcriptsRef.current = transcripts;
+  }, [transcripts]);
   // The active video stream (when cameraEnabled). Exposed so the parent can
   // hand it to useFaceLandmarks for facial expression detection.
   const [videoStream, setVideoStream] = useState<MediaStream | null>(null);
@@ -98,10 +116,17 @@ function useLiveAudio({
   const captureStartedAtRef = useRef<number>(0);
   const speakingRef = useRef(false);
   const silenceStartRef = useRef<number>(0);
+  // Wall-clock time the active recorder was started. Used to gate VAD
+  // from finalizing too early (before WebM EBML init segment is emitted).
+  const recorderStartedAtRef = useRef<number>(0);
 
   // Conversation state
   const conversationIdRef = useRef<string | null>(null);
   const orchestrateAbortRef = useRef<AbortController | null>(null);
+  // Tracks the persona used on the previous orchestrate turn. Diffing
+  // against the current persona lets us inject a [persona switch] system
+  // marker so the LLM doesn't carry over the prior character mid-stream.
+  const prevPersonaRef = useRef<string | null>(null);
 
   // TTS pipeline
   const ttsQueueRef = useRef<HTMLAudioElement[]>([]);
@@ -224,12 +249,56 @@ function useLiveAudio({
       let acc = "";
       const expression = expressionRef?.current ?? null;
       const persona = personaRef?.current ?? null;
+
+      // Build the multi-turn history so the LLM actually remembers context.
+      // Previously we sent only the latest user message — the model had no
+      // idea what was said 2 turns ago. Now: last N turns trimmed by a
+      // character budget that roughly maps to a ~4K-token context window
+      // (4 chars per token rule of thumb).
+      const HISTORY_MAX_CHARS = 16_000;
+      const HISTORY_MAX_TURNS = 20;
+      const past = transcriptsRef.current;
+      const windowed = past.slice(-HISTORY_MAX_TURNS);
+      // Walk from newest backwards, accumulating chars until budget hit.
+      const kept: TranscriptTurn[] = [];
+      let charBudget = HISTORY_MAX_CHARS - transcript.length;
+      for (let i = windowed.length - 1; i >= 0; i--) {
+        const t = windowed[i];
+        if (charBudget - t.content.length < 0) break;
+        kept.unshift(t);
+        charBudget -= t.content.length;
+      }
+      const historyMessages = kept.map((t) => ({
+        role: t.role === "ai" ? ("assistant" as const) : ("user" as const),
+        content: t.content,
+      }));
+      // If persona changed since the last turn, slip a system marker in so
+      // the LLM consciously switches character instead of bleeding the
+      // previous tone into a fresh role (Doctor accidentally cracking jokes
+      // because Comedian was active 30 seconds ago, etc.).
+      const personaSwitchMarker =
+        prevPersonaRef.current && prevPersonaRef.current !== persona
+          ? [
+              {
+                role: "system" as const,
+                content: `[persona switch: now playing ${persona}. Drop the prior character; behave consistently with the new role from this point on.]`,
+              },
+            ]
+          : [];
+      prevPersonaRef.current = persona;
+
+      const messagesPayload = [
+        ...personaSwitchMarker,
+        ...historyMessages,
+        { role: "user" as const, content: transcript },
+      ];
+
       try {
         const res = await fetch("/api/orchestrate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            messages: [{ role: "user", content: transcript }],
+            messages: messagesPayload,
             mood: null,
             conversationId: conversationIdRef.current,
             // From MediaPipe (when face detection is on). LLM uses it to
@@ -417,6 +486,7 @@ function useLiveAudio({
         if (next) {
           try {
             next.start(200);
+            recorderStartedAtRef.current = Date.now();
           } catch (err) {
             console.warn("[live] recorder.start failed:", err);
           }
@@ -459,7 +529,13 @@ function useLiveAudio({
         if (silenceStartRef.current === 0) {
           silenceStartRef.current = Date.now();
         } else if (Date.now() - silenceStartRef.current > VAD_SILENCE_DURATION_MS) {
-          finalizeUtterance();
+          // Don't finalize while the recorder is still emitting its first
+          // chunk (which contains the WebM EBML init segment). Without
+          // that header Cloudflare Whisper returns code 3030.
+          const recorderAge = Date.now() - (recorderStartedAtRef.current || 0);
+          if (recorderAge >= MIN_RECORDER_UPTIME_MS) {
+            finalizeUtterance();
+          }
         }
       }
     }
@@ -521,6 +597,7 @@ function useLiveAudio({
       recorderRef.current = recorder;
       try {
         recorder.start(200); // 200ms chunks
+        recorderStartedAtRef.current = Date.now();
       } catch (err) {
         throw new Error(`MediaRecorder.start failed: ${(err as Error)?.message ?? err}`);
       }
@@ -636,6 +713,20 @@ function useLiveAudio({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Direct TTS + transcript push. Used for the persona opening line so the
+  // AI greets the user without paying a round-trip orchestrate latency.
+  const speakLine = useCallback(
+    (text: string) => {
+      if (!text.trim() || stoppedRef.current) return;
+      setTranscripts((prev) => [
+        ...prev,
+        { id: `ai-greet-${Date.now()}`, role: "ai", content: text, ts: Date.now() },
+      ]);
+      void enqueueTts(text);
+    },
+    [enqueueTts]
+  );
+
   return {
     phase,
     isStreaming: phase !== "idle",
@@ -647,6 +738,7 @@ function useLiveAudio({
     transcripts,
     videoStream,
     interrupt,
+    speakLine,
     stop,
   };
 }
@@ -735,6 +827,19 @@ function LiveTalkSession({ onClose }: { onClose: () => void }) {
     if (userLocale.status === "idle") void dispatch(loadLocale());
   }, [userLocale.status, dispatch]);
 
+  // First-visit onboarding wizard. Shows when:
+  //   - localStorage doesn't have the "onboarded" flag (so a returning user
+  //     who already set things up isn't pestered)
+  //   - AND we're not still loading the locale (avoid race: wizard pops with
+  //     stale defaults, user picks something, locale loads and overrides)
+  const [wizardOpen, setWizardOpen] = useState(false);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (userLocale.status !== "ready") return;
+    const onboarded = window.localStorage.getItem("livetalk:onboarded");
+    if (!onboarded) setWizardOpen(true);
+  }, [userLocale.status]);
+
   const {
     phase,
     isModelSpeaking,
@@ -745,6 +850,7 @@ function LiveTalkSession({ onClose }: { onClose: () => void }) {
     transcripts,
     videoStream,
     interrupt,
+    speakLine,
     stop,
   } = useLiveAudio({
     cameraEnabled: faceEnabled,
@@ -752,6 +858,22 @@ function LiveTalkSession({ onClose }: { onClose: () => void }) {
     personaRef,
     languageRef,
   });
+
+  // ─── Opening greeting ────────────────────────────────────────────────
+  // When the session is ready (mic flowing, wizard closed, no prior turns)
+  // we greet the user in-character. Uses speakLine — direct TTS, no
+  // /api/orchestrate round-trip → user hears the greeting in ~1s.
+  const greetedRef = useRef(false);
+  useEffect(() => {
+    if (greetedRef.current) return;
+    if (wizardOpen) return;
+    if (phase !== "listening") return;
+    if (transcripts.length > 0) return; // user already mid-conversation (e.g. reconnect)
+    const card = PERSONAS[selectedPersona];
+    if (!card?.openingLine) return;
+    greetedRef.current = true;
+    speakLine(card.openingLine);
+  }, [phase, wizardOpen, transcripts.length, selectedPersona, speakLine]);
 
   const face = useFaceLandmarks({
     enabled: faceEnabled && !!videoStream,
@@ -798,12 +920,15 @@ function LiveTalkSession({ onClose }: { onClose: () => void }) {
         transcripts={transcripts}
         cameraEnabled={faceEnabled}
         onToggleCamera={handleToggleFace}
+        onReconfigure={() => setWizardOpen(true)}
         onClose={() => {
           stop();
           onClose();
         }}
         onInterrupt={interrupt}
       />
+
+      <OnboardingWizard open={wizardOpen} onClose={() => setWizardOpen(false)} />
     </>
   );
 }

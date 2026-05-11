@@ -40,6 +40,9 @@ interface AvatarRendererProps {
   expression: Expression;   // mirrors the user's face
   personaGlow: PersonaGlow; // tints the lighting + resting smile
   avatarUrl?: string;
+  /** Called once if the GLB fetch fails / GL context is lost. Parent can
+   *  use this to flip stageMode back to sphere + show a toast. */
+  onAvatarUnavailable?: () => void;
 }
 
 export default function AvatarRenderer({
@@ -48,21 +51,29 @@ export default function AvatarRenderer({
   expression,
   personaGlow,
   avatarUrl = DEFAULT_AVATAR_URL,
+  onAvatarUnavailable,
 }: AvatarRendererProps) {
-  // Track GL context loss so we can render a degraded text fallback instead
+  // Track GL context loss so we can render a degraded fallback instead
   // of a black canvas (some Windows machines lose context under memory
   // pressure when switching tabs).
   const [contextLost, setContextLost] = useState(false);
 
+  // Same look as sphere mode — no text label, no "Avatar unavailable" noise.
+  // Parent gets notified via onAvatarUnavailable so it can persist the
+  // sphere preference and stop trying to load the avatar.
   const fallbackUI = (
-    <FallbackPlaceholder personaGlow={personaGlow} reason="Avatar unavailable" />
+    <CssSphereFallback
+      personaGlow={personaGlow}
+      audioLevel={audioLevel}
+      speaking={speaking}
+    />
   );
 
   if (contextLost) return fallbackUI;
 
   return (
     <div className="relative size-full">
-      <AvatarErrorBoundary fallback={fallbackUI}>
+      <AvatarErrorBoundary fallback={fallbackUI} onError={onAvatarUnavailable}>
         <Canvas
           // Cap DPR at 1.5 (was 2). On Windows + iGPU, 2× × 4K canvas blows
           // VRAM and triggers context loss. 1.5 still looks crisp at typical
@@ -148,26 +159,45 @@ function LoadingSphere({ personaGlow }: { personaGlow: PersonaGlow }) {
 /**
  * Rendered OUTSIDE the Canvas when the avatar fails entirely (CDN down,
  * malformed GLB, GL context lost). Pure DOM, no WebGL — guaranteed to
- * render even when Three.js is broken.
+ * render even when Three.js is broken. Matches the sphere-mode look so
+ * the user sees a graceful continuation, not a broken-feature notice.
  */
-function FallbackPlaceholder({
+function CssSphereFallback({
   personaGlow,
-  reason,
+  audioLevel,
+  speaking,
 }: {
   personaGlow: PersonaGlow;
-  reason: string;
+  audioLevel: number;
+  speaking: boolean;
 }) {
+  const color = glowToColor(personaGlow);
+  const scale = 1 + (audioLevel / 100) * 0.18;
   return (
     <div className="size-full flex items-center justify-center">
-      <div className="flex flex-col items-center gap-3">
+      <div
+        className="relative size-72 transition-transform duration-200"
+        style={{ transform: `scale(${scale})` }}
+      >
         <div
-          className="size-32 rounded-full animate-pulse"
+          className="absolute -inset-12 rounded-full blur-3xl opacity-60"
+          style={{ background: `radial-gradient(circle, ${color}88, transparent 70%)` }}
+        />
+        <div
+          className="absolute inset-0 rounded-full overflow-hidden animate-spin"
           style={{
-            background: `radial-gradient(circle at 35% 30%, ${glowToColor(personaGlow)}cc, ${glowToColor(personaGlow)}33 60%, transparent 80%)`,
-            boxShadow: `0 0 60px 12px ${glowToColor(personaGlow)}55`,
+            animationDuration: speaking ? "6s" : "12s",
+            background: `conic-gradient(from 0deg, ${color}, ${color}cc, ${color})`,
+            filter: "blur(6px) saturate(1.4)",
           }}
         />
-        <p className="text-xs text-zinc-500 font-medium tracking-wide">{reason}</p>
+        <div
+          className="absolute inset-0 rounded-full pointer-events-none"
+          style={{
+            background:
+              "radial-gradient(circle at 32% 28%, rgba(255,255,255,0.45) 0%, transparent 55%)",
+          }}
+        />
       </div>
     </div>
   );

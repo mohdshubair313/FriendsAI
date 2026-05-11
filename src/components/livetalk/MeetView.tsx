@@ -34,6 +34,8 @@ interface MeetViewProps {
   /** Camera on/off. Drives FaceToggle + getUserMedia video. */
   cameraEnabled: boolean;
   onToggleCamera: (next: boolean) => void;
+  /** Re-open the onboarding wizard for changing country/language/voice/role. */
+  onReconfigure?: () => void;
   onClose: () => void;
   onInterrupt: () => void;
 }
@@ -61,6 +63,7 @@ export default function MeetView({
   transcripts,
   cameraEnabled,
   onToggleCamera,
+  onReconfigure,
   onClose,
   onInterrupt,
 }: MeetViewProps) {
@@ -76,6 +79,16 @@ export default function MeetView({
     setStageMode(next);
     if (typeof window !== "undefined") {
       window.localStorage.setItem("livetalk:stage", next);
+    }
+  };
+
+  // Avatar's GLB failed (network down, CORS, malformed) — quietly flip back
+  // to sphere mode. Persisting the choice means we don't try the broken
+  // avatar again on next mount.
+  const handleAvatarUnavailable = () => {
+    setStageMode("sphere");
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("livetalk:stage", "sphere");
     }
   };
 
@@ -128,6 +141,7 @@ export default function MeetView({
           userTranscript={userTranscript}
           aiResponse={aiResponse}
           phaseLabel={PHASE_LABEL[phase]}
+          onAvatarUnavailable={handleAvatarUnavailable}
         />
 
         <BottomBar
@@ -143,6 +157,7 @@ export default function MeetView({
           onToggleStage={handleToggleStage}
           sidePanelOpen={sidePanelOpen}
           onToggleSidePanel={() => setSidePanelOpen((s) => !s)}
+          onReconfigure={onReconfigure}
           onLeave={onClose}
         />
 

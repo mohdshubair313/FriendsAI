@@ -14,7 +14,6 @@ import MessageList from "@/components/chatComponents/MessageList";
 import EmptyState from "@/components/chatComponents/EmptyState";
 import VoiceMode from "@/components/chatComponents/VoiceMode";
 import { MoodChips } from "@/components/chatComponents/MoodChips";
-import PersonaSelector from "@/components/chatComponents/PersonaSelector";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { fetchPremiumStatus } from "@/store/slices/premiumSlice";
 import { sounds } from "@/lib/sounds";
@@ -396,7 +395,6 @@ function ChatPageInner() {
         {mainContent}
       </main>
 
-      <PersonaSelector />
       <MoodChips />
 
       <ChatInput
