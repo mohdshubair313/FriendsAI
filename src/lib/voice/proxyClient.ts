@@ -100,12 +100,15 @@ export async function proxyTranscribe(
 /**
  * POST /v1/synthesize through the proxy.
  *
+ * @param speaker  pre-resolved Sarvam speaker (e.g. "meera"); silently
+ *                 ignored if Sarvam isn't picked by the router
  * @returns the audio bytes, or null if proxy is unavailable / errored.
  */
 export async function proxySynthesize(
   text: string,
   lang: string,
-  claims: ServiceTokenClaims
+  claims: ServiceTokenClaims,
+  speaker?: string | null
 ): Promise<Buffer | null> {
   const url = baseUrl();
   if (!url) return null;
@@ -120,7 +123,7 @@ export async function proxySynthesize(
     const res = await fetch(`${url}/v1/synthesize`, {
       method: "POST",
       headers: { ...auth, "Content-Type": "application/json" },
-      body: JSON.stringify({ text, lang }),
+      body: JSON.stringify({ text, lang, speaker: speaker ?? null }),
       signal: ctrl.signal,
     });
     clearTimeout(t);

@@ -7,9 +7,13 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useAppSelector, useAppDispatch } from "@/store/hooks";
 import { loadLocale } from "@/store/slices/localeSlice";
+import { loadVoice } from "@/store/slices/voiceSlice";
 import LiveTalkTeaser from "@/components/chatComponents/LiveTalkTeaser";
 import MeetView from "@/components/livetalk/MeetView";
 import OnboardingWizard from "@/components/livetalk/OnboardingWizard";
+import ResumeManager from "@/components/livetalk/ResumeManager";
+import ReconnectOverlay from "@/components/livetalk/ReconnectOverlay";
+import { useNetworkState } from "@/lib/hooks/useNetworkState";
 import { PERSONAS } from "@/lib/chat/personas";
 import { useFaceLandmarks } from "@/lib/face/useFaceLandmarks";
 import { toast } from "sonner";
@@ -34,11 +38,47 @@ import { motion } from "framer-motion";
  *     echoCancellation, so the AI can't hear itself in the speakers.
  */
 
+// ─── Quota 429 helper ────────────────────────────────────────────────────────
+
+/**
+ * Renders a non-blocking toast when the voice service returns 429 Daily
+ * limit reached. Shows when capacity frees up so the user isn't blocked
+ * on a vague timeline.
+ *
+ * Body shape comes from voice-service/app/quota.py:to_429_body():
+ *   { error, resource, used, limit, reset_at_ms }
+ *
+ * We also dedupe — surface at most one toast per 60s so a chatty client
+ * doesn't pile up duplicate banners.
+ */
+let lastQuotaToastAt = 0;
+function showQuotaToast(body: { reset_at_ms?: number; resource?: string; detail?: { reset_at_ms?: number; resource?: string } } | null) {
+  const now = Date.now();
+  if (now - lastQuotaToastAt < 60_000) return;
+  lastQuotaToastAt = now;
+  // FastAPI nests under `detail`; Next.js direct responses may flatten.
+  const data = body?.detail ?? body ?? {};
+  const resetAt = data.reset_at_ms ?? now + 60 * 60 * 1000;
+  const minsLeft = Math.max(1, Math.ceil((resetAt - now) / 60000));
+  const hrs = Math.floor(minsLeft / 60);
+  const mins = minsLeft % 60;
+  const when = hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
+  toast.error(`Daily voice limit reached. Resets in ${when}.`, { duration: 8000 });
+}
+
 // ─── VAD tuning constants ────────────────────────────────────────────────────
 // Average byte frequency (0-255) above which we consider mic input "speech".
 // Raised 14 → 22: breathing + mouse-click noise was triggering false positives
 // → 1-2 frame utterances → Whisper hallucinations like "कर दो दो दो दो".
 const VAD_SPEECH_THRESHOLD = 22;
+// Barge-in threshold (higher) — while AI is speaking, ignore residual echo
+// and only trip on genuine user speech. echoCancellation in getUserMedia
+// handles 90% of it, this is the belt-and-suspenders 10%.
+const VAD_BARGE_IN_THRESHOLD = 36;
+// User must hold above the barge-in threshold for at least this many ms
+// before we cancel the AI's speech. Prevents a single cough from killing
+// the entire reply.
+const BARGE_IN_HOLD_MS = 250;
 // Average amplitude must drop below threshold for this long for us to call
 // the utterance "ended" and stop the recorder.
 const VAD_SILENCE_DURATION_MS = 1200;
@@ -77,6 +117,9 @@ interface UseLiveAudioOptions {
   /** Full BCP-47 language code (e.g. "hi-IN"). Server routes to Sarvam vs
    *  Cloudflare based on this. */
   languageRef?: React.RefObject<string>;
+  /** User's chosen voice style id ("warm_female", etc.). Server resolves
+   *  it to a Sarvam speaker name per (language, style). */
+  voiceStyleRef?: React.RefObject<string>;
 }
 
 function useLiveAudio({
@@ -84,6 +127,7 @@ function useLiveAudio({
   expressionRef,
   personaRef,
   languageRef,
+  voiceStyleRef,
 }: UseLiveAudioOptions) {
   const [phase, setPhase] = useState<VoicePhase>("idle");
   const [audioLevel, setAudioLevel] = useState(0);          // 0-100
@@ -119,6 +163,12 @@ function useLiveAudio({
   // Wall-clock time the active recorder was started. Used to gate VAD
   // from finalizing too early (before WebM EBML init segment is emitted).
   const recorderStartedAtRef = useRef<number>(0);
+  // Wall-clock time the user started sustained speech ABOVE the barge-in
+  // threshold WHILE the AI was talking. Once it crosses BARGE_IN_HOLD_MS,
+  // we cancel the AI mid-sentence.
+  const bargeInStartRef = useRef<number>(0);
+  // Indirection so tick (defined before interrupt) can still call it.
+  const interruptRef = useRef<() => void>(() => {});
 
   // Conversation state
   const conversationIdRef = useRef<string | null>(null);
@@ -182,17 +232,28 @@ function useLiveAudio({
         const res = await fetch("/api/voice/synthesize", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text: trimmed, lang: languageRef?.current ?? "en-US" }),
+          body: JSON.stringify({
+            text: trimmed,
+            lang: languageRef?.current ?? "en-US",
+            voiceStyle: voiceStyleRef?.current ?? null,
+          }),
         });
         if (!res.ok) {
           const reason = await res.json().catch(() => null);
           console.warn("[live] TTS http error:", res.status, reason);
+          if (res.status === 429) showQuotaToast(reason);
           return;
         }
         const blob = await res.blob();
         if (stoppedRef.current) return;
         const url = URL.createObjectURL(blob);
         const audio = new Audio(url);
+        // Jitter buffer: tell the browser to download + decode the file
+        // eagerly. By the time playNextTts pops it off the queue, the
+        // decoded PCM is in memory → zero-latency start → no gap between
+        // sentences → no "pop" / "crack" at sentence boundaries.
+        audio.preload = "auto";
+        try { audio.load(); } catch { /* some browsers throw on detached audio */ }
         audio.onended = () => {
           URL.revokeObjectURL(url);
           currentAudioRef.current = null;
@@ -209,7 +270,7 @@ function useLiveAudio({
         console.error("[live] TTS fetch failed:", err);
       }
     },
-    [playNextTts, languageRef]
+    [playNextTts, languageRef, voiceStyleRef]
   );
 
   const flushTtsBuffer = useCallback(() => {
@@ -305,6 +366,10 @@ function useLiveAudio({
             // tailor reactions: "you look surprised — what's up?"
             expression: expression && expression !== "neutral" ? expression : null,
             persona,
+            // Persisted to Redis (not consumed by LLM) so reconnects pick
+            // up the right voice + language without a profile round-trip.
+            voiceStyle: voiceStyleRef?.current ?? null,
+            locale: languageRef?.current ?? null,
           }),
           signal: ac.signal,
         });
@@ -358,7 +423,7 @@ function useLiveAudio({
         orchestrateAbortRef.current = null;
       }
     },
-    [onChatToken, flushTtsBuffer, expressionRef, personaRef]
+    [onChatToken, flushTtsBuffer, expressionRef, personaRef, voiceStyleRef, languageRef]
   );
 
   // ─── Whisper transcription ────────────────────────────────────────────
@@ -381,6 +446,7 @@ function useLiveAudio({
         if (!res.ok) {
           const err = await res.json().catch(() => null);
           console.warn("[live] transcribe http error:", res.status, err);
+          if (res.status === 429) showQuotaToast(err);
           setPhase("listening");
           return;
         }
@@ -485,7 +551,10 @@ function useLiveAudio({
         recorderRef.current = next;
         if (next) {
           try {
-            next.start(200);
+            // No timeslice — let stop() flush one self-contained WebM blob.
+            // With timeslice the trailing cluster gets truncated on stop()
+            // and both Whisper + Sarvam reject the file as malformed.
+            next.start();
             recorderStartedAtRef.current = Date.now();
           } catch (err) {
             console.warn("[live] recorder.start failed:", err);
@@ -514,10 +583,26 @@ function useLiveAudio({
     const avg = sum / bins;
     setAudioLevel(Math.min(100, (avg / 128) * 100));
 
-    // VAD is paused while the AI is talking so the mic doesn't pick up
-    // the speakers. Echo cancellation in getUserMedia helps too, but
-    // gating is the reliable belt-and-suspenders.
-    if (!ttsActiveRef.current) {
+    if (ttsActiveRef.current) {
+      // ─── Barge-in: AI is speaking, listen for user interruption ─────
+      // Threshold is raised because echoCancellation leaves a ~10-15
+      // residue on the analyser. We want to trip on genuine user speech
+      // only — typically 35-60 range, well above echo residue.
+      if (avg > VAD_BARGE_IN_THRESHOLD) {
+        if (bargeInStartRef.current === 0) {
+          bargeInStartRef.current = Date.now();
+        } else if (Date.now() - bargeInStartRef.current > BARGE_IN_HOLD_MS) {
+          // Sustained user speech → kill the AI's reply mid-sentence.
+          // interrupt() cancels audio + clears queue + aborts orchestrate.
+          bargeInStartRef.current = 0;
+          interruptRef.current();
+        }
+      } else {
+        // Speech dropped back below threshold — reset the hold timer.
+        bargeInStartRef.current = 0;
+      }
+    } else {
+      // ─── Normal VAD: user can speak freely ──────────────────────────
       if (avg > VAD_SPEECH_THRESHOLD) {
         if (!speakingRef.current) {
           speakingRef.current = true;
@@ -596,7 +681,7 @@ function useLiveAudio({
       recorder.onstop = () => {};
       recorderRef.current = recorder;
       try {
-        recorder.start(200); // 200ms chunks
+        recorder.start(); // no timeslice — single self-contained blob on stop()
         recorderStartedAtRef.current = Date.now();
       } catch (err) {
         throw new Error(`MediaRecorder.start failed: ${(err as Error)?.message ?? err}`);
@@ -706,6 +791,12 @@ function useLiveAudio({
     } catch { /* server stub is best-effort */ }
   }, []);
 
+  // Wire the interrupt ref so the VAD tick can call it without taking
+  // interrupt as a useCallback dep (would cause re-creation cascade).
+  useEffect(() => {
+    interruptRef.current = interrupt;
+  }, [interrupt]);
+
   // Auto-start on mount, full cleanup on unmount.
   useEffect(() => {
     void start();
@@ -727,6 +818,18 @@ function useLiveAudio({
     [enqueueTts]
   );
 
+  // Replace the in-memory transcript history with a server-restored set.
+  // Idempotent: same turns called twice = same final state. ResumeManager
+  // uses this on reconnect / page reload.
+  const restoreTranscripts = useCallback((turns: TranscriptTurn[]) => {
+    setTranscripts((prev) => {
+      // Don't clobber an active session — only restore when the local
+      // history is empty (fresh page load / reconnect with no new turns).
+      if (prev.length > 0) return prev;
+      return turns;
+    });
+  }, []);
+
   return {
     phase,
     isStreaming: phase !== "idle",
@@ -739,6 +842,7 @@ function useLiveAudio({
     videoStream,
     interrupt,
     speakLine,
+    restoreTranscripts,
     stop,
   };
 }
@@ -821,11 +925,22 @@ function LiveTalkSession({ onClose }: { onClose: () => void }) {
     languageRef.current = userLocale.primaryLanguage;
   }, [userLocale.primaryLanguage]);
 
-  // Trigger lazy-load of locale into Redux on first mount.
+  // Voice style — same ref-mirroring pattern. Server resolves the style ID
+  // ("warm_female") to a Sarvam speaker ("meera") per language.
+  const voiceState = useAppSelector((s) => s.voice);
+  const voiceStyleRef = useRef<string>(voiceState.style);
+  useEffect(() => {
+    voiceStyleRef.current = voiceState.style;
+  }, [voiceState.style]);
+
+  // Trigger lazy-load of locale + voice into Redux on first mount.
   const dispatch = useAppDispatch();
   useEffect(() => {
     if (userLocale.status === "idle") void dispatch(loadLocale());
   }, [userLocale.status, dispatch]);
+  useEffect(() => {
+    if (voiceState.status === "idle") void dispatch(loadVoice());
+  }, [voiceState.status, dispatch]);
 
   // First-visit onboarding wizard. Shows when:
   //   - localStorage doesn't have the "onboarded" flag (so a returning user
@@ -851,13 +966,19 @@ function LiveTalkSession({ onClose }: { onClose: () => void }) {
     videoStream,
     interrupt,
     speakLine,
+    restoreTranscripts,
     stop,
   } = useLiveAudio({
     cameraEnabled: faceEnabled,
     expressionRef,
     personaRef,
     languageRef,
+    voiceStyleRef,
   });
+
+  // Network state — flips overlay between online / reconnecting / offline.
+  // Heartbeat ping every 15s; OS events flip instantly.
+  const network = useNetworkState(true);
 
   // ─── Opening greeting ────────────────────────────────────────────────
   // When the session is ready (mic flowing, wizard closed, no prior turns)
@@ -929,6 +1050,17 @@ function LiveTalkSession({ onClose }: { onClose: () => void }) {
       />
 
       <OnboardingWizard open={wizardOpen} onClose={() => setWizardOpen(false)} />
+
+      {/* Hydrates Redux (persona/locale/voice) + transcripts on mount.
+          Runs ONCE per session — internal ref prevents re-fetching. */}
+      <ResumeManager onRestoreTurns={restoreTranscripts} />
+
+      {/* Non-blocking banner while network is degraded. */}
+      <ReconnectOverlay
+        state={network.state}
+        lastOnlineAt={network.lastOnlineAt}
+        onRetry={network.retry}
+      />
     </>
   );
 }

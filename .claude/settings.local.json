@@ -20,7 +20,21 @@
       "Bash(echo \"LINT EXIT: $?\")",
       "WebSearch",
       "WebFetch(domain:openrouter.ai)",
-      "Bash(echo \"BUILD EXIT: $?\")"
+      "Bash(echo \"BUILD EXIT: $?\")",
+      "Bash(python -c \"import ast; [ast.parse\\(open\\(f\\).read\\(\\)\\) for f in ['app/main.py', 'app/voice_router.py', 'app/sarvam.py']]; print\\('python OK'\\)\")",
+      "Bash(python -c \"import ast; [ast.parse\\(open\\(f\\).read\\(\\)\\) for f in ['app/main.py', 'app/quota.py', 'app/voice_router.py', 'app/sarvam.py']]; print\\('python parse OK'\\)\")",
+      "Bash(curl -s -o /tmp/hb.json -w \"HTTP %{http_code}  time=%{time_total}s\\\\n\" -X POST http://localhost:3000/api/voice/heartbeat)",
+      "Bash(curl -s -i http://localhost:3000/api/voice/resume)",
+      "Bash(curl -s -i -X POST http://localhost:3000/api/voice/transcribe -F \"audio=@/dev/null\")",
+      "Bash(curl -s -i -X POST http://localhost:3000/api/voice/synthesize -H 'Content-Type: application/json' -d '{\"text\":\"hi\",\"lang\":\"en-US\"}')",
+      "Bash(curl -s -i -X PATCH http://localhost:3000/api/profile/voice -H 'Content-Type: application/json' -d '{\"ttsVoiceId\":\"warm_female\"}')",
+      "Bash(curl -s -i -X PATCH http://localhost:3000/api/profile/persona -H 'Content-Type: application/json' -d '{\"buddyPersona\":\"doctor\"}')",
+      "PowerShell(Get-NetTCPConnection *)",
+      "Bash(curl *)",
+      "Bash(nslookup models.readyplayer.me)",
+      "Bash(awk -F= '{print $1}')",
+      "PowerShell($env:VOICE_SERVICE_DIR = \"D:\\\\Projects\\\\Spherial Ai\\\\voice-service\"; cd $env:VOICE_SERVICE_DIR; python --version; python -m venv .venv; if \\($?\\) { Write-Host \"venv created\" } else { Write-Host \"venv failed\" })",
+      "Bash(xxd)"
     ]
   }
 }

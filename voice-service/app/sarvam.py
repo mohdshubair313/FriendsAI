@@ -48,20 +48,23 @@ SUPPORTED_LANGS: set[str] = {
 }
 
 # Default voice per language. Users can override per-request via the `speaker`
-# param on synthesize(). Picks chosen for clarity + warmth (the persona-default
-# for a "friendly companion" app).
+# param on synthesize(). bulbul:v2 speakers are language-agnostic — the same
+# speaker adapts to all 11 supported languages — so "anushka" (warm female)
+# is the universal default. Old per-language speakers (meera, pavithra, etc.)
+# were retired in Sarvam's v2 voice refresh; the strings above were rejected
+# with HTTP 400 "Speaker '<name>' is not recognized".
 DEFAULT_VOICE: dict[str, str] = {
-    "hi-IN": "meera",
-    "ta-IN": "pavithra",
-    "te-IN": "maya",
-    "bn-IN": "diya",
-    "mr-IN": "amol",
-    "gu-IN": "neel",
-    "kn-IN": "karun",
-    "ml-IN": "arvind",
-    "pa-IN": "manisha",
-    "od-IN": "vidya",
-    "en-IN": "meera",  # Meera reads English-India well too
+    "hi-IN": "anushka",
+    "ta-IN": "anushka",
+    "te-IN": "anushka",
+    "bn-IN": "anushka",
+    "mr-IN": "anushka",
+    "gu-IN": "anushka",
+    "kn-IN": "anushka",
+    "ml-IN": "anushka",
+    "pa-IN": "anushka",
+    "od-IN": "anushka",
+    "en-IN": "anushka",
 }
 
 

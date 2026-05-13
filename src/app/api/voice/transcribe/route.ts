@@ -68,21 +68,31 @@ export async function POST(req: NextRequest) {
 
   // Proxy-first when configured; null return signals "fall back to direct".
   if (isProxyConfigured()) {
+    const t0 = Date.now();
     const proxied = await proxyTranscribe(audioBuffer, language, {
       userId: token.id as string,
       tier: entitlement.tier,
     });
     if (proxied !== null) {
-      console.log(`[voice:transcribe] proxied chars=${proxied.length}`);
-      return NextResponse.json({ text: proxied });
+      const ms = Date.now() - t0;
+      console.log(`[voice:transcribe] proxied chars=${proxied.length} dur=${ms}ms`);
+      return NextResponse.json(
+        { text: proxied },
+        { headers: { "Server-Timing": `stt;dur=${ms};desc="proxy"` } }
+      );
     }
     console.warn("[voice:transcribe] proxy unavailable — falling back to direct Cloudflare");
   }
 
   try {
     // Direct-CF fallback: Whisper wants the 2-letter code, not BCP-47.
+    const t0 = Date.now();
     const text = await transcribeAudio(audioBuffer, sttLangFor(language));
-    return NextResponse.json({ text });
+    const ms = Date.now() - t0;
+    return NextResponse.json(
+      { text },
+      { headers: { "Server-Timing": `stt;dur=${ms};desc="cloudflare-direct"` } }
+    );
   } catch (err) {
     const code = err instanceof CloudflareVoiceError ? err.code : "unknown";
     console.error("[voice:transcribe] failed:", code, errMessage(err));

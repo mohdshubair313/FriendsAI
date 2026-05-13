@@ -1,5 +1,5 @@
 import { ChatOpenAI } from "@langchain/openai";
-import { BaseMessage, SystemMessage } from "@langchain/core/messages";
+import { BaseMessage, SystemMessage, HumanMessage, AIMessage } from "@langchain/core/messages";
 import { getProviderApiKey } from "@/services/providers/registry";
 import { errMessage } from "@/lib/errors";
 import { buildChatSystemPrompt } from "./systemPrompt";
@@ -38,10 +38,11 @@ const FALLBACK_REPLY =
   "I'm having trouble responding right now — try sending that again in a moment.";
 
 // Per-model first-token deadline. If a model hasn't started streaming
-// by this point, abort and try the next one. 8s catches the "provider
-// hangs for 60s before 503" failure mode while still giving a healthy
-// model time to start (free OpenRouter models legit take 2-5s sometimes).
-const FIRST_TOKEN_DEADLINE_MS = 8_000;
+// by this point, abort and try the next one. 4s catches both the "provider
+// hangs for 60s before 503" failure mode AND the "free tier rate-limited
+// so it never responds" mode without burning user-visible time. Healthy
+// free-tier models first-token in 1-2s — 4s leaves comfortable headroom.
+const FIRST_TOKEN_DEADLINE_MS = 4_000;
 
 // Hard ceiling on a single model's TOTAL response time. Once first-token
 // arrives we let the stream run, but cap total time to keep a runaway
@@ -61,19 +62,141 @@ const FULL_RESPONSE_DEADLINE_MS = 45_000;
  * To swap the chain, edit this list — there's intentionally no per-task
  * registry indirection here. Chat is the one path where fallback matters.
  */
+// Order reflects current availability, not theoretical preference.
+// Re-bench when the free tier rotates and reorder accordingly.
+// Models starting with "@cf/" are dispatched to Cloudflare Workers AI
+// instead of OpenRouter — see tryCloudflareModel below.
 const CHAT_MODEL_CHAIN: Array<{ id: string; temperature: number }> = [
-  // Primary: NVIDIA Nemotron Nano Omni 30B reasoning. Verified to
-  // first-token in ~2-3s consistently under load. Multimodal-capable
-  // (text/image/audio in), so it doubles as our future vision model.
-  { id: "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free", temperature: 0.7 },
-  // Fallback 1: large Nemotron — ~17s for first token but high availability.
-  { id: "nvidia/nemotron-3-super-120b-a12b:free", temperature: 0.7 },
-  // Fallback 2: Baidu CoBuddy. Coding/agent model — kept as last resort.
-  // Currently hangs > 60s for many requests, so the 8s deadline almost
-  // always trips before it streams. Listed last so we only wait on it
-  // after Nemotron variants have already failed.
+  // Primary: Cloudflare Llama 3.1 8B Instruct. Free + reliable + ~2s
+  // first-token. Lives on our own CF account (same token as STT/TTS) so
+  // we control the rate limits, unlike OpenRouter free where the whole
+  // pool gets throttled. Verified: cuts cold chat from 10.5s → 2.5s.
+  { id: "@cf/meta/llama-3.1-8b-instruct", temperature: 0.7 },
+  // Fallback 1: Baidu CoBuddy. Free OpenRouter; sometimes faster than
+  // CF Llama when CF is congested.
   { id: "baidu/cobuddy:free", temperature: 0.7 },
+  // Fallback 2: NVIDIA Nemotron Nano Omni 30B. Multimodal, used when
+  // CF + Baidu both miss.
+  { id: "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free", temperature: 0.7 },
+  // Fallback 3: large Nemotron — slow first-token but high quality;
+  // last-resort safety net.
+  { id: "nvidia/nemotron-3-super-120b-a12b:free", temperature: 0.7 },
 ];
+
+/**
+ * Convert LangChain BaseMessage[] to OpenAI-format role/content pairs that
+ * Cloudflare Workers AI Llama models expect.
+ */
+function messagesToCfFormat(msgs: BaseMessage[]): Array<{ role: string; content: string }> {
+  return msgs.map((m) => {
+    const content = typeof m.content === "string" ? m.content : JSON.stringify(m.content);
+    if (m instanceof SystemMessage) return { role: "system", content };
+    if (m instanceof HumanMessage) return { role: "user", content };
+    if (m instanceof AIMessage) return { role: "assistant", content };
+    return { role: "user", content };
+  });
+}
+
+/**
+ * Stream from Cloudflare Workers AI. Mirrors tryOneModel's contract but
+ * uses raw fetch + SSE parsing instead of LangChain (which has no CF
+ * adapter). Honours the same deadlines via the shared AbortController.
+ */
+async function tryCloudflareModel(
+  modelId: string,
+  temperature: number,
+  llmInput: BaseMessage[],
+  userSignal: AbortSignal | undefined,
+  writer: StreamWriter,
+  t0: number
+): Promise<{ ok: true; text: string } | { ok: false; transient: boolean; error: unknown }> {
+  const tModelStart = Date.now();
+  console.log(`[streamChat] try ${modelId} ${ms(t0)}`);
+
+  const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
+  const apiToken = process.env.CLOUDFLARE_API_TOKEN;
+  if (!accountId || !apiToken) {
+    return { ok: false, transient: false, error: new Error("cloudflare not configured") };
+  }
+
+  const childCtrl = new AbortController();
+  const onUserAbort = () => childCtrl.abort();
+  userSignal?.addEventListener("abort", onUserAbort);
+
+  let firstTokenDeadlineHit = false;
+  let totalDeadlineHit = false;
+  const firstTokenTimer = setTimeout(() => { firstTokenDeadlineHit = true; childCtrl.abort(); }, FIRST_TOKEN_DEADLINE_MS);
+  const totalTimer = setTimeout(() => { totalDeadlineHit = true; childCtrl.abort(); }, FULL_RESPONSE_DEADLINE_MS);
+
+  let acc = "";
+  let tokenCount = 0;
+  try {
+    const res = await fetch(
+      `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/${modelId}`,
+      {
+        method: "POST",
+        headers: { Authorization: `Bearer ${apiToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: messagesToCfFormat(llmInput), stream: true, temperature, max_tokens: 1024 }),
+        signal: childCtrl.signal,
+      }
+    );
+    if (!res.ok || !res.body) {
+      const txt = await res.text().catch(() => "");
+      return { ok: false, transient: res.status >= 500 || res.status === 429, error: new Error(`CF HTTP ${res.status}: ${txt.slice(0, 200)}`) };
+    }
+    // Parse SSE: lines beginning with "data: " carry one JSON token chunk.
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    while (true) {
+      if (userSignal?.aborted) break;
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      // Each SSE event terminates with a blank line or single newline.
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+      for (const raw of lines) {
+        const line = raw.trim();
+        if (!line.startsWith("data:")) continue;
+        const data = line.slice(5).trim();
+        if (data === "[DONE]") continue;
+        try {
+          const obj = JSON.parse(data);
+          const token: string = obj.response ?? "";
+          if (!token) continue;
+          if (tokenCount === 0) {
+            clearTimeout(firstTokenTimer);
+            console.log(`[streamChat] first-token ${modelId} ${ms(tModelStart)}`);
+          }
+          tokenCount++;
+          acc += token;
+          writer({ type: "token", content: token });
+        } catch {
+          // ignore malformed JSON line
+        }
+      }
+    }
+    console.log(`[streamChat] ok ${modelId} chars=${acc.length} chunks=${tokenCount} model_time=${ms(tModelStart)} total=${ms(t0)}`);
+    return { ok: true, text: acc };
+  } catch (err) {
+    if (userSignal?.aborted) throw err;
+    if (firstTokenDeadlineHit) {
+      console.warn(`[streamChat] timeout(first-token>${FIRST_TOKEN_DEADLINE_MS}ms) ${modelId} ${ms(tModelStart)}`);
+      return { ok: false, transient: true, error: new Error("first_token_timeout") };
+    }
+    if (totalDeadlineHit) {
+      if (acc) return { ok: true, text: acc };
+      return { ok: false, transient: true, error: new Error("total_timeout") };
+    }
+    if (acc) return { ok: true, text: acc };
+    return { ok: false, transient: true, error: err };
+  } finally {
+    clearTimeout(firstTokenTimer);
+    clearTimeout(totalTimer);
+    userSignal?.removeEventListener("abort", onUserAbort);
+  }
+}
 
 function isRateLimit(err: unknown): boolean {
   const msg = errMessage(err).toLowerCase();
@@ -228,7 +351,9 @@ export async function streamChat(opts: StreamChatOptions): Promise<string> {
     const { id, temperature } = CHAT_MODEL_CHAIN[i];
     const isLast = i === CHAT_MODEL_CHAIN.length - 1;
 
-    const result = await tryOneModel(id, temperature, apiKey, llmInput, signal, writer, t0);
+    const result = id.startsWith("@cf/")
+      ? await tryCloudflareModel(id, temperature, llmInput, signal, writer, t0)
+      : await tryOneModel(id, temperature, apiKey, llmInput, signal, writer, t0);
     if (result.ok) return result.text;
 
     lastError = result.error;

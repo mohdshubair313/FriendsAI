@@ -13,6 +13,7 @@ import { streamChat } from "@/lib/chat/streamChat";
 import { generateImage, ImageGenerationError } from "@/lib/chat/generateImage";
 import { errMessage, isAbort } from "@/lib/errors";
 import { saveVoiceSession } from "@/lib/sessions/voiceSession";
+import { recordTurnMetric } from "@/lib/telemetry/voiceTelemetry";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -172,11 +173,21 @@ export async function POST(req: NextRequest) {
     log("schema FAIL", parsed.error.issues[0]?.message);
     return jsonError(`Invalid: ${parsed.error.issues[0]?.message}`, 400);
   }
-  const { messages: rawMessages, mood, conversationId, expression, persona } = parsed.data;
+  const {
+    messages: rawMessages,
+    mood,
+    conversationId,
+    expression,
+    persona,
+    voiceStyle,
+    locale,
+  } = parsed.data;
   const userId = token.id as string;
   const moodKey = mood ?? null;
   const expressionKey = expression ?? null;
   const personaKey = persona ?? null;
+  const voiceStyleKey = voiceStyle ?? null;
+  const localeKey = locale ?? null;
 
   const messages = toLangChainMessages(rawMessages);
   const latestText = extractLatestText(messages);
@@ -281,6 +292,8 @@ export async function POST(req: NextRequest) {
           void saveVoiceSession(userId, {
             conversationId: resolvedConversationId,
             persona: personaKey,
+            locale: localeKey,
+            voiceStyle: voiceStyleKey,
           });
           return;
         }
@@ -288,6 +301,16 @@ export async function POST(req: NextRequest) {
         // ─── Chat path: direct LLM stream ─────────────────────────────
         log("→ chat branch (calling streamChat)");
         let acc = "";
+        let ttftMs = 0;
+        const tLlm = Date.now();
+        // Wrap writer to capture time-to-first-token. The first {type:"token"}
+        // event is by definition the moment the LLM started producing.
+        const wrappedWriter: typeof writer = (chunk) => {
+          if (ttftMs === 0 && chunk.type === "token") {
+            ttftMs = Date.now() - tLlm;
+          }
+          writer(chunk);
+        };
         try {
           acc = await streamChat({
             messages,
@@ -295,7 +318,7 @@ export async function POST(req: NextRequest) {
             expression: expressionKey,
             persona: personaKey,
             signal: req.signal,
-            writer,
+            writer: wrappedWriter,
           });
         } catch (err) {
           if (req.signal.aborted || isAbort(err)) {
@@ -325,14 +348,32 @@ export async function POST(req: NextRequest) {
         }
 
         writer({ type: "done" });
-        log(`chat done — total ${ms()}`);
+        const totalMs = Date.now() - t0;
+        const llmMs = Date.now() - tLlm;
+        log(`chat done — total ${ms()} ttft=${ttftMs}ms llm=${llmMs}ms`);
 
         // Warm the voice-session cache so a reconnect picks up the same
-        // persona/conversation/locale/expression instantly. Fire-and-forget;
-        // failure here doesn't affect the user-visible response.
+        // state instantly. Fire-and-forget; failure here doesn't affect
+        // the user-visible response. turnCount auto-increments inside
+        // saveVoiceSession when persona OR conversationId is present.
         void saveVoiceSession(userId, {
           conversationId: resolvedConversationId,
           persona: personaKey,
+          locale: localeKey,
+          voiceStyle: voiceStyleKey,
+          expression: expressionKey,
+        });
+
+        // Telemetry — one row per turn. Aggregated later for latency
+        // dashboards ("p95 ttft for hi-IN over the last 24h").
+        void recordTurnMetric({
+          userId,
+          conversationId: resolvedConversationId,
+          ttft_ms: ttftMs,
+          llm_ms: llmMs,
+          total_ms: totalMs,
+          persona: personaKey,
+          locale: localeKey,
           expression: expressionKey,
         });
       } catch (err) {

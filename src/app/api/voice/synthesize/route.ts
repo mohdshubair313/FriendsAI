@@ -5,6 +5,7 @@ import { getEntitlement } from "@/lib/entitlement";
 import { synthesizeSpeech, CloudflareVoiceError } from "@/lib/voice/cloudflareSpeech";
 import { proxySynthesize, isProxyConfigured } from "@/lib/voice/proxyClient";
 import { ttsLangFor } from "@/lib/locale/catalog";
+import { resolveSarvamSpeaker, type VoiceStyleId } from "@/lib/voices/catalog";
 import { errMessage } from "@/lib/errors";
 
 export const runtime = "nodejs";
@@ -17,6 +18,12 @@ const MAX_TEXT_LENGTH = 1500;
 const ttsSchema = z.object({
   text: z.string().min(1).max(MAX_TEXT_LENGTH),
   lang: z.string().min(2).max(10).optional(),
+  // User's chosen voice style (from onboarding step 3). We resolve here
+  // because the catalog lives in TS — no point duplicating that map in
+  // Python. Server hands `speaker: "meera"` (already resolved) to FastAPI.
+  voiceStyle: z
+    .enum(["warm_female", "confident_male", "bright_playful", "calm_senior"])
+    .optional(),
 });
 
 /**
@@ -60,21 +67,36 @@ export async function POST(req: NextRequest) {
   }
 
   const requestedLang = parsed.data.lang ?? "en-US";
+  // Resolve voice style → Sarvam speaker name using our TS catalog. null
+  // when the user hasn't picked a style or the (language, style) pair
+  // isn't supported — Sarvam falls back to its per-language default.
+  const speaker = resolveSarvamSpeaker(
+    requestedLang,
+    parsed.data.voiceStyle as VoiceStyleId | undefined
+  );
 
   // Proxy-first when configured; null return signals "fall back to direct".
   if (isProxyConfigured()) {
-    const proxied = await proxySynthesize(parsed.data.text, requestedLang, {
-      userId: token.id as string,
-      tier: entitlement.tier,
-    });
+    const t0 = Date.now();
+    const proxied = await proxySynthesize(
+      parsed.data.text,
+      requestedLang,
+      {
+        userId: token.id as string,
+        tier: entitlement.tier,
+      },
+      speaker
+    );
     if (proxied !== null) {
-      console.log(`[voice:synthesize] proxied bytes=${proxied.length}`);
+      const ms = Date.now() - t0;
+      console.log(`[voice:synthesize] proxied bytes=${proxied.length} dur=${ms}ms`);
       return new Response(new Uint8Array(proxied), {
         status: 200,
         headers: {
           "Content-Type": "audio/mpeg",
           "Content-Length": proxied.length.toString(),
           "Cache-Control": "no-store",
+          "Server-Timing": `tts;dur=${ms};desc="proxy"`,
         },
       });
     }
@@ -84,13 +106,16 @@ export async function POST(req: NextRequest) {
   try {
     // Direct CF fallback: MeloTTS only speaks en/es/fr/zh/jp/kr — Indian
     // langs degrade to English voice automatically via ttsLangFor().
+    const t0 = Date.now();
     const audio = await synthesizeSpeech(parsed.data.text, ttsLangFor(requestedLang));
+    const ms = Date.now() - t0;
     return new Response(new Uint8Array(audio), {
       status: 200,
       headers: {
         "Content-Type": "audio/mpeg",
         "Content-Length": audio.length.toString(),
         "Cache-Control": "no-store",
+        "Server-Timing": `tts;dur=${ms};desc="cloudflare-direct"`,
       },
     });
   } catch (err) {

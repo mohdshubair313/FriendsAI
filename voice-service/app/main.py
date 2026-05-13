@@ -27,8 +27,11 @@ from pydantic import BaseModel, Field
 # Load .env BEFORE importing anything that reads env at import-time.
 load_dotenv()
 
+import time  # noqa: E402
+
 from app.auth import ServiceContext, verify_token  # noqa: E402
 from app.cloudflare import CloudflareError  # noqa: E402
+from app.quota import check_and_record  # noqa: E402
 from app.voice_router import synthesize as route_synthesize, transcribe as route_transcribe  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -71,25 +74,41 @@ async def transcribe_endpoint(
     ctx: ServiceContext = Depends(verify_token),
 ):
     """
-    Accept multipart audio + BCP-47 language code; return { text }.
+    Accept multipart audio + BCP-47 language code; return { text, provider }.
 
-    The router decides Sarvam (Indian langs) vs Cloudflare Whisper.
-    Same client-facing contract as the Next.js /api/voice/transcribe route.
+    Pipeline:
+      1. quota-check (estimated: 1 char per 100ms audio, rough upper bound)
+      2. route to provider (Sarvam vs Cloudflare Whisper)
+      3. record actual units consumed in quota tracker
+      4. attach Server-Timing header with stt;dur=<ms>
+
+    Server-Timing format is a W3C standard the browser DevTools natively
+    visualises in Network → Timing tab. Free observability.
     """
     audio_bytes = await audio.read()
     if not audio_bytes:
-        return {"text": "", "provider": None}
+        return Response(content='{"text":"","provider":null}', media_type="application/json")
     if len(audio_bytes) > 25 * 1024 * 1024:
         raise HTTPException(status_code=413, detail="Audio file too large (max 25 MB)")
     if len(audio_bytes) < 1024:
         # Same guard as the Next.js client — tiny blobs choke Whisper.
-        return {"text": "", "provider": None}
+        return Response(content='{"text":"","provider":null}', media_type="application/json")
+
+    # Quota: rough pre-check using estimated 1 char per ~100ms audio. Real
+    # usage is recorded post-success with actual transcript char count.
+    # Sarvam vs Cloudflare resource bucket decided by the router later;
+    # we use a unified "stt" bucket here.
+    resource = "sarvam_stt" if language.endswith("-IN") else "cloudflare_stt"
+    estimated_units = max(1, len(audio_bytes) // 4000)  # ~10 chars / second of opus
+    q = await check_and_record(ctx.user_id, ctx.tier, resource, estimated_units)
+    if not q.allowed:
+        log.warning("[transcribe] quota exceeded user=%s used=%d/%d", ctx.user_id, q.used, q.limit)
+        raise HTTPException(status_code=429, detail=q.to_429_body())
 
     log.info("[transcribe] user=%s lang=%s bytes=%d", ctx.user_id, language, len(audio_bytes))
+    t0 = time.perf_counter()
     try:
         text, provider = await route_transcribe(audio_bytes, language=language)
-        log.info("[transcribe] done provider=%s chars=%d", provider, len(text))
-        return {"text": text, "provider": provider}
     except CloudflareError as e:
         log.warning("[transcribe] cloudflare %s: %s", e.code, e)
         status = (
@@ -98,6 +117,16 @@ async def transcribe_endpoint(
             500
         )
         raise HTTPException(status_code=status, detail={"error": "Transcription failed", "code": e.code})
+    dur_ms = int((time.perf_counter() - t0) * 1000)
+    log.info("[transcribe] done provider=%s chars=%d dur=%dms", provider, len(text), dur_ms)
+    return Response(
+        content=__import__("json").dumps({"text": text, "provider": provider}),
+        media_type="application/json",
+        headers={
+            "Server-Timing": f"stt;dur={dur_ms};desc=\"{provider}\"",
+            "X-Voice-Provider": provider or "none",
+        },
+    )
 
 
 # ─── Synthesize ──────────────────────────────────────────────────────────────
@@ -107,6 +136,10 @@ class SynthesizeRequest(BaseModel):
     text: str = Field(min_length=1, max_length=1500)
     # BCP-47 (e.g. "hi-IN", "en-US"). Router maps to provider-specific codes.
     lang: Optional[str] = Field(default="en-US")
+    # Sarvam speaker name (e.g. "meera", "arvind"). Pre-resolved on the
+    # Next.js side from the user's voiceStyle + language combo. Ignored
+    # when the Cloudflare fallback path is taken.
+    speaker: Optional[str] = Field(default=None)
 
 
 @app.post("/v1/synthesize")
@@ -115,20 +148,38 @@ async def synthesize_endpoint(
     ctx: ServiceContext = Depends(verify_token),
 ):
     """
-    Accept { text, lang } and return audio bytes. Router picks Sarvam vs
-    Cloudflare based on language. Provider name is set as a response header
-    so the client can display "Voiced by Meera (Sarvam)" if it wants.
+    Accept { text, lang, speaker? } and return audio bytes. Router picks
+    Sarvam vs Cloudflare based on language. Provider name is set as a
+    response header so the client can display "Voiced by Meera (Sarvam)".
     """
-    log.info("[synthesize] user=%s lang=%s chars=%d", ctx.user_id, body.lang, len(body.text))
+    # Quota: 1 char of text = 1 unit. Cheap to compute exactly here.
+    lang = body.lang or "en-US"
+    resource = "sarvam_tts" if lang.endswith("-IN") else "cloudflare_tts"
+    q = await check_and_record(ctx.user_id, ctx.tier, resource, len(body.text))
+    if not q.allowed:
+        log.warning("[synthesize] quota exceeded user=%s used=%d/%d", ctx.user_id, q.used, q.limit)
+        raise HTTPException(status_code=429, detail=q.to_429_body())
+
+    log.info(
+        "[synthesize] user=%s lang=%s speaker=%s chars=%d",
+        ctx.user_id, body.lang, body.speaker, len(body.text),
+    )
+    t0 = time.perf_counter()
     try:
-        audio_bytes, provider = await route_synthesize(body.text, language=body.lang or "en-US")
-        log.info("[synthesize] done provider=%s bytes=%d", provider, len(audio_bytes))
+        audio_bytes, provider = await route_synthesize(
+            body.text,
+            language=lang,
+            speaker=body.speaker,
+        )
+        dur_ms = int((time.perf_counter() - t0) * 1000)
+        log.info("[synthesize] done provider=%s bytes=%d dur=%dms", provider, len(audio_bytes), dur_ms)
         return Response(
             content=audio_bytes,
             media_type="audio/mpeg",
             headers={
                 "Cache-Control": "no-store",
                 "X-Voice-Provider": provider,
+                "Server-Timing": f"tts;dur={dur_ms};desc=\"{provider}\"",
             },
         )
     except CloudflareError as e:

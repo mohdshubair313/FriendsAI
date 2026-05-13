@@ -46,76 +46,30 @@ export const VOICE_STYLES: VoiceStyle[] = [
   },
 ];
 
-/**
- * Sarvam speaker ID per (style × language). When the exact combo isn't
- * available, we fall back to the language's default voice — see
- * voice-service/app/sarvam.py:DEFAULT_VOICE.
- *
- * The keys here mirror Sarvam's documented speaker names. The mapping is
- * intentionally conservative — when in doubt we route to the safest voice
- * for that language.
- */
+// Sarvam bulbul:v2 speakers are language-agnostic — the same speaker
+// adapts prosody for every supported language. So the (style → speaker)
+// mapping is uniform across all 11 locales, and we just expose the
+// language entries for forward compatibility (in case a speaker becomes
+// language-locked again later, or a regional voice is added).
+const UNIFORM_V2: Record<VoiceStyleId, string> = {
+  warm_female:    "anushka",
+  confident_male: "abhilash",
+  bright_playful: "kavya",
+  calm_senior:    "ashutosh",
+};
+
 export const STYLE_TO_SARVAM_SPEAKER: Record<string, Partial<Record<VoiceStyleId, string>>> = {
-  "hi-IN": {
-    warm_female:    "meera",
-    confident_male: "arvind",
-    bright_playful: "manisha",
-    calm_senior:    "amol",
-  },
-  "ta-IN": {
-    warm_female:    "pavithra",
-    confident_male: "karun",
-    bright_playful: "maya",
-    calm_senior:    "karun",
-  },
-  "te-IN": {
-    warm_female:    "maya",
-    confident_male: "neel",
-    bright_playful: "maya",
-    calm_senior:    "neel",
-  },
-  "bn-IN": {
-    warm_female:    "diya",
-    confident_male: "amol",
-    bright_playful: "diya",
-    calm_senior:    "amol",
-  },
-  "mr-IN": {
-    warm_female:    "manisha",
-    confident_male: "amol",
-    bright_playful: "manisha",
-    calm_senior:    "amol",
-  },
-  "gu-IN": {
-    warm_female:    "manisha",
-    confident_male: "neel",
-    bright_playful: "manisha",
-    calm_senior:    "neel",
-  },
-  "kn-IN": {
-    warm_female:    "pavithra",
-    confident_male: "karun",
-    bright_playful: "maya",
-    calm_senior:    "karun",
-  },
-  "ml-IN": {
-    warm_female:    "pavithra",
-    confident_male: "arvind",
-    bright_playful: "maya",
-    calm_senior:    "arvind",
-  },
-  "pa-IN": {
-    warm_female:    "manisha",
-    confident_male: "amol",
-    bright_playful: "manisha",
-    calm_senior:    "amol",
-  },
-  "en-IN": {
-    warm_female:    "meera",
-    confident_male: "arvind",
-    bright_playful: "manisha",
-    calm_senior:    "amol",
-  },
+  "hi-IN": UNIFORM_V2,
+  "ta-IN": UNIFORM_V2,
+  "te-IN": UNIFORM_V2,
+  "bn-IN": UNIFORM_V2,
+  "mr-IN": UNIFORM_V2,
+  "gu-IN": UNIFORM_V2,
+  "kn-IN": UNIFORM_V2,
+  "ml-IN": UNIFORM_V2,
+  "pa-IN": UNIFORM_V2,
+  "od-IN": UNIFORM_V2,
+  "en-IN": UNIFORM_V2,
 };
 
 /**

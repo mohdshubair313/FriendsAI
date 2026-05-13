@@ -25,9 +25,15 @@ export interface VoiceSession {
   conversationId: string | null;
   persona: string | null;
   locale: string | null;
+  /** User-picked voice style (warm_female / confident_male / …). Lets
+   *  reconnects restore the right Sarvam speaker without a profile fetch. */
+  voiceStyle: string | null;
   expression: string | null;
   /** ms-precision unix epoch of the last orchestrate turn. */
   lastUtteranceAt: number;
+  /** How many turns have happened in this session. Useful for "you're on
+   *  turn 14" UX cues + abuse detection. Increments on every save. */
+  turnCount: number;
 }
 
 function key(userId: string): string {
@@ -68,13 +74,23 @@ export async function saveVoiceSession(
       conversationId: null,
       persona: null,
       locale: null,
+      voiceStyle: null,
       expression: null,
       lastUtteranceAt: 0,
+      turnCount: 0,
     };
     const merged: VoiceSession = {
       ...existing,
       ...partial,
       lastUtteranceAt: partial.lastUtteranceAt ?? Date.now(),
+      // Caller can override turnCount explicitly; otherwise increment when
+      // this save represents a new utterance (heuristic: any save that
+      // sets persona OR conversationId).
+      turnCount:
+        partial.turnCount ??
+        (partial.persona || partial.conversationId
+          ? (existing.turnCount ?? 0) + 1
+          : existing.turnCount ?? 0),
     };
     await r.set(key(userId), merged, { ex: TTL_SECONDS });
   } catch (err) {

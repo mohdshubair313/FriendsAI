@@ -80,20 +80,29 @@ async def transcribe(audio_bytes: bytes, language: str) -> Tuple[str, Provider]:
 # ─── TTS router ──────────────────────────────────────────────────────────────
 
 
-async def synthesize(text: str, language: str) -> Tuple[bytes, Provider]:
+async def synthesize(
+    text: str,
+    language: str,
+    speaker: str | None = None,
+) -> Tuple[bytes, Provider]:
     """
     Returns (audio_bytes, provider_used).
 
     Routing:
       - Sarvam-supported language + Sarvam configured → try Sarvam first
+        (with the caller-resolved `speaker` if provided; falls through to
+        Sarvam's per-language default if None)
       - Anything else → Cloudflare MeloTTS (English fallback for Indian if
         Sarvam is unavailable)
+
+    Cloudflare doesn't support speaker selection — speaker is silently
+    ignored on that path.
     """
     use_sarvam = sarvam.is_configured() and sarvam.supports(language)
 
     if use_sarvam:
         try:
-            audio = await sarvam.synthesize(text, language=language)
+            audio = await sarvam.synthesize(text, language=language, speaker=speaker)
             return audio, "sarvam"
         except sarvam.SarvamError as e:
             log.warning("[router] sarvam TTS failed (%s) — falling back to cloudflare", e.code)

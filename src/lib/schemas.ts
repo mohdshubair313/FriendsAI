@@ -78,6 +78,14 @@ export const generateSchema = z.object({
     ])
     .nullable()
     .optional(),
+  // Voice style ID — not used by the LLM, only persisted to Redis so a
+  // reconnect can restore the right Sarvam speaker without a Mongo hit.
+  voiceStyle: z
+    .enum(["warm_female", "confident_male", "bright_playful", "calm_senior"])
+    .nullable()
+    .optional(),
+  // BCP-47 language code — same reason as voiceStyle.
+  locale: z.string().min(2).max(10).nullable().optional(),
 });
 
 // ─── Payment Schemas ─────────────────────────────────────────────────────────

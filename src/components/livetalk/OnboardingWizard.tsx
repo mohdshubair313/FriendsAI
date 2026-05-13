@@ -7,6 +7,7 @@ import { useSession } from "next-auth/react";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { setLocale, saveLocale } from "@/store/slices/localeSlice";
 import { setPersona, savePersona } from "@/store/slices/personaSlice";
+import { setVoiceStyle, saveVoice, loadVoice } from "@/store/slices/voiceSlice";
 import { COUNTRIES, languagesForCountry, DEFAULT_COUNTRY, DEFAULT_LANGUAGE } from "@/lib/locale/catalog";
 import { PERSONAS, PERSONA_KEYS } from "@/lib/chat/personas";
 import { VOICE_STYLES, type VoiceStyleId } from "@/lib/voices/catalog";
@@ -42,12 +43,25 @@ export default function OnboardingWizard({ open, onClose }: OnboardingWizardProp
   const dispatch = useAppDispatch();
   const locale = useAppSelector((s) => s.locale);
   const persona = useAppSelector((s) => s.persona.selected);
+  const voiceFromStore = useAppSelector((s) => s.voice);
+
+  // Lazy-load saved voice style so the wizard reflects prior choice if
+  // the user reopens via the Reconfigure button.
+  useEffect(() => {
+    if (voiceFromStore.status === "idle") void dispatch(loadVoice());
+  }, [voiceFromStore.status, dispatch]);
 
   const [step, setStep] = useState<Step>("intro");
   const [country, setCountry] = useState<string>(locale.country || DEFAULT_COUNTRY);
   const [language, setLanguage] = useState<string>(locale.primaryLanguage || DEFAULT_LANGUAGE);
-  const [voiceStyle, setVoiceStyle] = useState<VoiceStyleId>("warm_female");
+  const [voiceStyle, setLocalVoiceStyle] = useState<VoiceStyleId>(voiceFromStore.style);
   const [role, setRole] = useState<BuddyPersona>(persona);
+
+  // Sync local state when the store loads the saved value (so re-opening
+  // the wizard mid-session shows the user's existing pick highlighted).
+  useEffect(() => {
+    if (voiceFromStore.status === "ready") setLocalVoiceStyle(voiceFromStore.style);
+  }, [voiceFromStore.status, voiceFromStore.style]);
   // True when Next was clicked on the persona step with Doctor picked + no
   // prior consent — the modal pops, we wait for accept/reject.
   const [showDoctorConsent, setShowDoctorConsent] = useState(false);
@@ -86,12 +100,10 @@ export default function OnboardingWizard({ open, onClose }: OnboardingWizardProp
       void dispatch(savePersona(role));
     }
     if (leaving === "voice") {
-      // Voice style has its own endpoint — fire-and-forget.
-      void fetch("/api/profile/voice", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ttsVoiceId: voiceStyle }),
-      }).catch((err) => console.warn("[onboarding] voice save failed:", err));
+      // Persist to Redux first (so live_talk's voiceStyleRef picks it up
+      // immediately) then fire-and-forget the server write.
+      dispatch(setVoiceStyle(voiceStyle));
+      void dispatch(saveVoice(voiceStyle));
     }
   };
 
@@ -203,7 +215,7 @@ export default function OnboardingWizard({ open, onClose }: OnboardingWizardProp
                 />
               )}
               {step === "voice" && (
-                <VoiceBody value={voiceStyle} onPick={setVoiceStyle} />
+                <VoiceBody value={voiceStyle} onPick={setLocalVoiceStyle} />
               )}
               {step === "persona" && (
                 <PersonaBody value={role} onPick={setRole} />
