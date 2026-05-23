@@ -1,0 +1,165 @@
+﻿
+Filename                LineNumber Line                                                                                        
+--------                ---------- ----                                                                                        
+auth.ts                          1 import { NextAuthOptions, getServerSession } from "next-auth";                              
+auth.ts                          2 import CredentialsProvider from "next-auth/providers/credentials";                          
+auth.ts                          3 import GithubProvider from "next-auth/providers/github";                                    
+auth.ts                          4 import GoogleProvider from "next-auth/providers/google";                                    
+auth.ts                          5 import { compare } from "bcryptjs";                                                         
+auth.ts                          6 import { User } from "@/models/userModel";                                                  
+auth.ts                          7 import { connectToDb } from "@/lib/db";                                                     
+cloudinary.ts                    1 import { v2 as cloudinary, type UploadApiResponse } from "cloudinary";                      
+db.ts                            1 import mongoose from "mongoose";                                                            
+entitlement.ts                   1 import { Subscription, TIER_FEATURES, TIER_QUOTAS, type Tier } from "@/models/Subscription";
+entitlement.ts                   2 import { connectToDb } from "@/lib/db";                                                     
+schemas.ts                       1 import { z } from "zod";                                                                    
+utils.ts                         1 import { clsx, type ClassValue } from "clsx"                                                
+utils.ts                         2 import { twMerge } from "tailwind-merge"                                                    
+AvatarSession.ts                 1 import mongoose, { Schema, Types, Document } from "mongoose";                               
+ChatModel.ts                     3 import { Schema, models, model } from 'mongoose';                                           
+Conversation.ts                  1 import mongoose, { Schema, Types, Document } from "mongoose";                               
+EmotionEvent.ts                  1 import mongoose, { Schema, Types, Document } from "mongoose";                               
+MediaJob.ts                      1 import mongoose, { Schema, Types, Document } from "mongoose";                               
+ModerationEvent.ts               1 import mongoose, { Schema, Types, Document } from "mongoose";                               
+ProviderUsageLog.ts              1 import mongoose, { Schema, Types, Document } from "mongoose";                               
+ProviderUsageLog.ts              2 import { ProviderName, TaskType } from "@/services/providers/registry";                     
+Subscription.ts                  1 import mongoose, { Schema, Types, Document } from "mongoose";                               
+userModel.ts                     1 import mongoose, { Schema, Types, Document } from "mongoose";                               
+UserPreferences.ts               1 import mongoose, { Schema, Types, Document } from "mongoose";                               
+VoiceMetric.ts                   1 import mongoose, { Schema, Types, Document } from "mongoose";                               
+VoiceSession.ts                  1 import mongoose, { Schema, Types, Document } from "mongoose";                               
+geminiWebSockets.ts              1 import { TranscriptionService } from './transcriptionService';                              
+geminiWebSockets.ts              2 import { pcmToWav } from '@/utils/audioUtils';                                              
+hooks.ts                         1 import { useDispatch, useSelector } from "react-redux";                                     
+hooks.ts                         2 import type { TypedUseSelectorHook } from "react-redux";                                    
+hooks.ts                         3 import type { RootState, AppDispatch } from "./index";                                      
+index.ts                         1 import { configureStore } from "@reduxjs/toolkit";                                          
+index.ts                         2 import chatReducer from "./slices/chatSlice";                                               
+index.ts                         3 import premiumReducer from "./slices/premiumSlice";                                         
+index.ts                         4 import personaReducer from "./slices/personaSlice";                                         
+index.ts                         5 import localeReducer from "./slices/localeSlice";                                           
+index.ts                         6 import voiceReducer from "./slices/voiceSlice";                                             
+ClientHomepage.tsx               3 import { useState, useEffect } from "react";                                                
+ClientHomepage.tsx               4 import Calltoactions from "@/sections/CallToAction";                                        
+ClientHomepage.tsx               5 import Companies from "@/sections/Companies";                                               
+ClientHomepage.tsx               6 import Features from "@/sections/Features";                                                 
+ClientHomepage.tsx               7 import Footer from "@/sections/Footer";                                                     
+ClientHomepage.tsx               8 import Header from "@/sections/Header";                                                     
+ClientHomepage.tsx               9 import Hero from "@/sections/Hero";                                                         
+ClientHomepage.tsx              10 import Pricing from "@/sections/Pricing";                                                   
+ClientHomepage.tsx              11 import Testimonials from "@/sections/Testimonials";                                         
+ClientHomepage.tsx              12 import Popup from "@/components/popup";                                                     
+ClientHomepage.tsx              13 import { Loader } from "@/components/Loader"                                                
+ClientHomepage.tsx              14 import { useSession } from "@/context/SessionContext";                                      
+layout.tsx                       1 import type { Metadata } from "next";                                                       
+layout.tsx                       2 import { Sora, Space_Grotesk, Geist, Instrument_Serif } from "next/font/google";            
+layout.tsx                       4 import { Toaster } from "@/components/ui/sonner";                                           
+layout.tsx                       5 import { SessionProvider } from "@/context/SessionContext";                                 
+layout.tsx                       6 import { Analytics } from '@vercel/analytics/next';                                         
+layout.tsx                       7 import { StoreProvider } from "@/components/providers/StoreProvider";                       
+layout.tsx                       8 import MainShell from "@/components/shell/MainShell";                                       
+page.tsx                         4 import ClientHomepage from "./ClientHomepage";                                              
+Button.tsx                       3 import { cva } from "class-variance-authority";                                             
+Button.tsx                       4 import { useRouter } from "next/navigation";                                                
+Button.tsx                       5 import { HTMLAttributes } from "react";                                                     
+CameraPreview.tsx                4 import { useEffect, useRef, useState, useCallback } from 'react';                           
+CameraPreview.tsx                5 import { NeonGradientCard } from "@/components/magicui/neon-gradient-card";                 
+CameraPreview.tsx                6 import Button from "@/components/Button"                                                    
+CameraPreview.tsx                7 import { Video, VideoOff } from "lucide-react";                                             
+CameraPreview.tsx                8 import { GeminiWebSocket } from '@/services/geminiWebSockets';                              
+CameraPreview.tsx                9 import { Base64 } from 'js-base64';                                                         
+Loader.tsx                       1 import { Skeleton } from "@/components/ui/skeleton"                                         
+Logo.tsx                         1 import logoImage from "@/assets/images/sphereal-logo.svg?url"                               
+Logo.tsx                         2 import { twMerge } from "tailwind-merge";                                                   
+Logo.tsx                         3 import { HTMLAttributes } from "react"                                                      
+Orbit.tsx                        1 import { HTMLAttributes } from 'react'                                                      
+Orbit.tsx                        2 import { twMerge } from 'tailwind-merge'                                                    
+Planet.tsx                       1 import { cva } from "class-variance-authority"                                              
+Planet.tsx                       2 import { HTMLAttributes } from "react";                                                     
+popup.tsx                        3 import { useState } from "react";                                                           
+popup.tsx                        4 import Link from "next/link";                                                               
+popup.tsx                        5 import { motion, AnimatePresence } from "framer-motion";                                    
+PremiumSuccessPopup.tsx          3 import { motion, AnimatePresence } from "framer-motion";                                    
+PremiumSuccessPopup.tsx          4 import { useRouter } from "next/navigation";                                                
+PremiumSuccessPopup.tsx          5 import { Button } from "@/components/ui/button";                                            
+PremiumSuccessPopup.tsx          6 import { CheckCircle2, Sparkles } from "lucide-react";                                      
+PremiumSuccessPopup.tsx          7 import confetti from "canvas-confetti";                                                     
+PremiumSuccessPopup.tsx          8 import { useEffect } from "react";                                                          
+SectionBorder.tsx                1 import { HTMLAttributes } from "react"                                                      
+SectionBorder.tsx                2 import { twMerge } from "tailwind-merge"                                                    
+SectionContent.tsx               1 import React, { HTMLAttributes } from 'react'                                               
+SectionContent.tsx               2 import { twMerge } from 'tailwind-merge'                                                    
+SessionContext.tsx               3 import { SessionProvider as NextAuthSessionProvider } from "next-auth/react";               
+SessionContext.tsx               4 import { FC, ReactNode } from "react";                                                      
+CallToAction.tsx                 3 import Logo from "@/components/Logo";                                                       
+CallToAction.tsx                 4 import SectionBorder from "@/components/SectionBorder";                                     
+CallToAction.tsx                 5 import SectionContent from "@/components/SectionContent";                                   
+CallToAction.tsx                14 import { motion } from "framer-motion";                                                     
+CallToAction.tsx                15 import Link from "next/link";                                                               
+Companies.tsx                    3 import AcmeCorpLogo from "@/assets/images/acme-corp-logo.svg";                              
+Companies.tsx                    4 import EchoValleyLogo from "@/assets/images/echo-valley-logo.svg";                          
+Companies.tsx                    5 import QuantumLogo from "@/assets/images/quantum-logo.svg";                                 
+Companies.tsx                    6 import PulseLogo from "@/assets/images/pulse-logo.svg";                                     
+Companies.tsx                    7 import OutsideLogo from "@/assets/images/outside-logo.svg";                                 
+Companies.tsx                    8 import CelestialLogo from "@/assets/images/celestial-logo.svg";                             
+Companies.tsx                    9 import SectionBorder from "@/components/SectionBorder";                                     
+Companies.tsx                   10 import SectionContent from "@/components/SectionContent";                                   
+Companies.tsx                   11 import Image from "next/image";                                                             
+Features.tsx                     3 import coolmood from "../assets/images/cool.png"                                            
+Features.tsx                     4 import crymood from "../assets/images/cry.png"                                              
+Features.tsx                     5 import pareshaanMood from "../assets/images/pareshaan.png"                                  
+Features.tsx                     6 import dhattiMood from "../assets/images/dhatti.png"                                        
+Features.tsx                     7 import loveMood from "../assets/images/love.png"                                            
+Features.tsx                     8 import moneyideaMood from "../assets/images/moneyidea.png"                                  
+Features.tsx                     9 import thinkingMood from "../assets/images/thinking.png"                                    
+Features.tsx                    10 import sadMood from "../assets/images/sad.png"                                              
+Features.tsx                    11 import SectionBorder from "@/components/SectionBorder";                                     
+Features.tsx                    12 import SectionContent from "@/components/SectionContent";                                   
+Features.tsx                    13 import Orbit from "@/components/Orbit";                                                     
+Features.tsx                    14 import Logo from "@/components/Logo";                                                       
+Features.tsx                    15 import Image from "next/image";                                                             
+Features.tsx                    16 import { motion } from "framer-motion";                                                     
+Features.tsx                    17 import Link from "next/link";                                                               
+Features.tsx                    18 import { Check } from "lucide-react";                                                       
+Footer.tsx                       1 import React from "react";                                                                  
+Footer.tsx                       7 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";                           
+Footer.tsx                       8 import Link from "next/link";                                                               
+Footer.tsx                       9 import Logo from "@/components/Logo";                                                       
+Header.tsx                       3 import { useState } from "react";                                                           
+Header.tsx                       4 import { useSession } from "@/context/SessionContext";                                      
+Header.tsx                       5 import { signOut } from "next-auth/react";                                                  
+Header.tsx                       6 import Logo from "@/components/Logo";                                                       
+Header.tsx                       7 import Link from "next/link";                                                               
+Header.tsx                       8 import { motion, AnimatePresence } from "framer-motion";                                    
+Hero.tsx                         3 import { useEffect, useRef, useState } from "react";                                        
+Hero.tsx                         4 import { motion, useMotionValue, useScroll, useSpring, useTransform } from "framer-motion"; 
+Hero.tsx                         5 import Image from "next/image";                                                             
+Hero.tsx                         6 import Link from "next/link";                                                               
+Hero.tsx                         7 import FaceImage from "@/assets/images/Face.jpg";                                           
+Hero.tsx                         8 import Loader from "@/assets/images/loader-animated.svg";                                   
+Hero.tsx                         9 import Orbit from "@/components/Orbit";                                                     
+Hero.tsx                        10 import { Planet } from "@/components/Planet";                                               
+Hero.tsx                        11 import SectionBorder from "@/components/SectionBorder";                                     
+Hero.tsx                        12 import SectionContent from "@/components/SectionContent";                                   
+Pricing.tsx                      3 import Script from "next/script";                                                           
+Pricing.tsx                      4 import React, { useState } from "react";                                                    
+Pricing.tsx                      5 import SectionBorder from "@/components/SectionBorder";                                     
+Pricing.tsx                      6 import SectionContent from "@/components/SectionContent";                                   
+Pricing.tsx                      7 import { twMerge } from "tailwind-merge";                                                   
+Pricing.tsx                      8 import { useRouter } from "next/navigation";                                                
+Pricing.tsx                      9 import Link from "next/link";                                                               
+Pricing.tsx                     10 import { motion } from "framer-motion";                                                     
+Pricing.tsx                     11 import { Check } from "lucide-react";                                                       
+Pricing.tsx                     12 import { RazorpayOptions } from "@/lib/types";                                              
+Testimonials.tsx                 3 import React, { useState } from "react";                                                    
+Testimonials.tsx                 4 import AshwinSantiago from "@/assets/images/ashwin-santiago.jpg";                           
+Testimonials.tsx                 5 import AlecWhitten from "@/assets/images/alec-whitten.jpg";                                 
+Testimonials.tsx                 6 import ReneWells from "@/assets/images/rene-wells.jpg";                                     
+Testimonials.tsx                 7 import MollieHall from "@/assets/images/mollie-hall.jpg";                                   
+Testimonials.tsx                 8 import SectionBorder from "@/components/SectionBorder";                                     
+Testimonials.tsx                 9 import SectionContent from "@/components/SectionContent";                                   
+Testimonials.tsx                10 import Image from "next/image";                                                             
+Testimonials.tsx                11 import { motion, AnimatePresence } from "framer-motion";                                    
+Testimonials.tsx                12 import { ChevronLeft, ChevronRight, Quote } from "lucide-react";                            
+
+
