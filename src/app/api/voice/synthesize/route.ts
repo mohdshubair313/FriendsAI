@@ -6,6 +6,8 @@ import { synthesizeSpeech, CloudflareVoiceError } from "@/lib/voice/cloudflareSp
 import { proxySynthesize, isProxyConfigured } from "@/lib/voice/proxyClient";
 import { ttsLangFor } from "@/lib/locale/catalog";
 import { resolveSarvamSpeaker, type VoiceStyleId } from "@/lib/voices/catalog";
+import { PERSONAS } from "@/lib/chat/personas";
+import type { BuddyPersona } from "@/models/userModel";
 import { errMessage } from "@/lib/errors";
 
 export const runtime = "nodejs";
@@ -20,9 +22,16 @@ const ttsSchema = z.object({
   lang: z.string().min(2).max(10).optional(),
   // User's chosen voice style (from onboarding step 3). We resolve here
   // because the catalog lives in TS — no point duplicating that map in
-  // Python. Server hands `speaker: "meera"` (already resolved) to FastAPI.
+  // Python. Server hands the resolved Sarvam speaker to FastAPI.
   voiceStyle: z
     .enum(["warm_female", "confident_male", "bright_playful", "calm_senior"])
+    .optional(),
+  // Active persona (from the meet selector). When voiceStyle is NOT
+  // explicitly provided, the persona's preferred voiceStyle (from
+  // personas.ts) is used as a fallback, so the TTS voice matches the
+  // character the user is talking to.
+  persona: z
+    .enum(["friendly", "humorous", "philosophical", "romantic", "motivational", "doctor", "musician", "comedian", "senior_dev"])
     .optional(),
 });
 
@@ -67,12 +76,23 @@ export async function POST(req: NextRequest) {
   }
 
   const requestedLang = parsed.data.lang ?? "en-US";
+  // Persona → voiceStyle resolution: if the caller didn't explicitly provide
+  // a voiceStyle but DID provide a persona, use the persona's preferred style.
+  // This ensures the TTS voice matches the character (Doctor→calm_senior,
+  // Comedian→bright_playful, etc.) without the client needing to manage both.
+  let effectiveStyle: VoiceStyleId | undefined = parsed.data.voiceStyle as VoiceStyleId | undefined;
+  if (!effectiveStyle && parsed.data.persona) {
+    const card = PERSONAS[parsed.data.persona as BuddyPersona];
+    if (card?.voiceStyle) {
+      effectiveStyle = card.voiceStyle;
+    }
+  }
   // Resolve voice style → Sarvam speaker name using our TS catalog. null
-  // when the user hasn't picked a style or the (language, style) pair
-  // isn't supported — Sarvam falls back to its per-language default.
+  // when there's no matching (language, style) pair — Sarvam falls back
+  // to its per-language default.
   const speaker = resolveSarvamSpeaker(
     requestedLang,
-    parsed.data.voiceStyle as VoiceStyleId | undefined
+    effectiveStyle
   );
 
   // Proxy-first when configured; null return signals "fall back to direct".

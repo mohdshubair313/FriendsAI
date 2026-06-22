@@ -1,18 +1,20 @@
 """
-Sarvam AI client — STT (saaras-v2) + TTS (bulbul-v2) for Indian languages.
+Sarvam AI client — STT (saaras-v2) + TTS (bulbul-v3) for Indian languages.
 
 Why Sarvam over Cloudflare for Indian languages:
   - Cloudflare MeloTTS only speaks en/es/fr/zh/jp/kr — no Indian langs.
   - Cloudflare Whisper handles Hindi STT but with mediocre accuracy on
     code-mixed Hindi-English. Sarvam's saaras-v2 is trained on Indian
     speech and dramatically outperforms it.
-  - Sarvam TTS (bulbul-v2) has named voices like Meera, Arjun, Pavithra
-    that sound natively Indian.
+  - Sarvam TTS (bulbul-v3) has 30+ speakers with natively Indian prosody,
+    improved quality, and higher sample rates vs bulbul-v2.
 
 Free tier: Sarvam gives generous developer credits. Hard limits live in
 their dashboard; we don't track here (Phase 3.5 = Redis quota tracker).
 
 API docs: https://docs.sarvam.ai/api-reference-docs
+Upgraded to bulbul:v3 (2025-09): text (not inputs array), no pitch/loudness,
+enable_preprocessing removed. Default speaker shubh.
 """
 
 from __future__ import annotations
@@ -27,10 +29,10 @@ import httpx
 
 API_BASE = "https://api.sarvam.ai"
 STT_MODEL = "saaras:v2"
-TTS_MODEL = "bulbul:v2"
+TTS_MODEL = "bulbul:v3"
 
 STT_TIMEOUT_S = 25.0  # Sarvam STT is slower than Whisper on first-token
-TTS_TIMEOUT_S = 15.0
+TTS_TIMEOUT_S = 30.0  # v3 can be slightly slower on long text; bumped from 15s
 
 # Languages Sarvam supports (BCP-47 with -IN region).
 SUPPORTED_LANGS: set[str] = {
@@ -48,23 +50,25 @@ SUPPORTED_LANGS: set[str] = {
 }
 
 # Default voice per language. Users can override per-request via the `speaker`
-# param on synthesize(). bulbul:v2 speakers are language-agnostic — the same
-# speaker adapts to all 11 supported languages — so "anushka" (warm female)
-# is the universal default. Old per-language speakers (meera, pavithra, etc.)
-# were retired in Sarvam's v2 voice refresh; the strings above were rejected
-# with HTTP 400 "Speaker '<name>' is not recognized".
+# param on synthesize(). bulbul:v3 speakers are language-agnostic — the same
+# speaker adapts to all 11 supported languages — so "shubh" (neutral, pleasant)
+# is the universal default.
+# The catalog.ts file in Next.js maps voiceStyle IDs (warm_female, confident_male,
+# etc.) to v3-compatible speakers (anushka, abhilash, kavya, ashutosh — all
+# valid in bulbul:v3). When a style is selected, it passes the resolved speaker
+# name via the `speaker` param, bypassing DEFAULT_VOICE.
 DEFAULT_VOICE: dict[str, str] = {
-    "hi-IN": "anushka",
-    "ta-IN": "anushka",
-    "te-IN": "anushka",
-    "bn-IN": "anushka",
-    "mr-IN": "anushka",
-    "gu-IN": "anushka",
-    "kn-IN": "anushka",
-    "ml-IN": "anushka",
-    "pa-IN": "anushka",
-    "od-IN": "anushka",
-    "en-IN": "anushka",
+    "hi-IN": "shubh",
+    "ta-IN": "shubh",
+    "te-IN": "shubh",
+    "bn-IN": "shubh",
+    "mr-IN": "shubh",
+    "gu-IN": "shubh",
+    "kn-IN": "shubh",
+    "ml-IN": "shubh",
+    "pa-IN": "shubh",
+    "od-IN": "shubh",
+    "en-IN": "shubh",
 }
 
 
@@ -149,7 +153,13 @@ async def synthesize(
     pace: float = 1.0,
 ) -> bytes:
     """
-    Synthesise with Sarvam bulbul-v2.
+    Synthesise with Sarvam bulbul-v3.
+
+    v3 API differences from v2:
+      - Uses `text` (singular string) instead of `inputs` array
+      - No `pitch`, `loudness`, `enable_preprocessing` params
+      - Default speaker is `shubh` (was `anushka` in v2)
+      - Supports higher sample rates (up to 48 kHz)
 
     Sarvam returns base64 WAV inside JSON: { "audios": ["..."] }.
     We decode and return raw bytes. Caller serves them as audio/mpeg —
@@ -159,16 +169,14 @@ async def synthesize(
     if not supports(language):
         raise SarvamError(f"Unsupported Sarvam language: {language}", "unsupported_lang")
 
-    voice = speaker or DEFAULT_VOICE.get(language, "meera")
+    voice = speaker or DEFAULT_VOICE.get(language, "shubh")
     body = {
-        "inputs": [text],
+        "text": text,
         "target_language_code": language,
         "speaker": voice,
         "model": TTS_MODEL,
         "pace": pace,
-        "loudness": 1.0,
-        "speech_sample_rate": 22050,
-        "enable_preprocessing": True,
+        "speech_sample_rate": 24000,
     }
 
     async with httpx.AsyncClient(timeout=TTS_TIMEOUT_S) as client:

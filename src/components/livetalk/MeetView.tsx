@@ -34,6 +34,10 @@ interface MeetViewProps {
   /** Camera on/off. Drives FaceToggle + getUserMedia video. */
   cameraEnabled: boolean;
   onToggleCamera: (next: boolean) => void;
+  /** Mic mute state + toggle. Driven by the useLiveAudio hook so muting
+   *  actually stops VAD processing (not just visual-only). */
+  micMuted: boolean;
+  onToggleMic: () => void;
   /** Re-open the onboarding wizard for changing country/language/voice/role. */
   onReconfigure?: () => void;
   onClose: () => void;
@@ -47,8 +51,9 @@ interface MeetViewProps {
  * - User self-view PiP top-right (draggable).
  * - Bottom controls bar with persona/locale popovers.
  * - Right side panel collapsible (participants + chat log).
- * - Mic mute is purely visual today — VAD continues so we can re-arm
- *   the moment the user unmutes (no re-prompt for permission).
+ * - Mic mute now properly gates VAD processing in the useLiveAudio hook.
+ *   The stream stays alive so no re-prompt on unmute, but speech
+ *   detection and transcription are suppressed while muted.
  */
 export default function MeetView({
   persona,
@@ -63,6 +68,8 @@ export default function MeetView({
   transcripts,
   cameraEnabled,
   onToggleCamera,
+  micMuted,
+  onToggleMic,
   onReconfigure,
   onClose,
   onInterrupt,
@@ -99,8 +106,8 @@ export default function MeetView({
     setSidePanelOpen(window.innerWidth >= 1024);
   }, []);
 
-  // Mic mute is visual-only — see comment above.
-  const [micMuted, setMicMuted] = useState(false);
+  // Mic mute state is now driven by the useLiveAudio hook (wired through
+  // props). When muted, VAD processing is suppressed in the tick function.
 
   // Wall-clock session timer (Zoom shows elapsed time top-left).
   const [elapsedMs, setElapsedMs] = useState(0);
@@ -146,11 +153,7 @@ export default function MeetView({
 
         <BottomBar
           micMuted={micMuted}
-          onToggleMic={() => {
-            // Visual-only flip; if AI is mid-sentence, treat as interrupt.
-            if (!micMuted && isModelSpeaking) onInterrupt();
-            setMicMuted((m) => !m);
-          }}
+          onToggleMic={onToggleMic}
           cameraEnabled={cameraEnabled}
           onToggleCamera={onToggleCamera}
           stageMode={stageMode}

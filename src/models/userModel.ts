@@ -28,6 +28,7 @@ export type BuddyPersona =
   | "romantic"
   | "motivational"
   | "doctor"
+  | "musician"
   | "comedian"
   | "senior_dev";
 
@@ -96,6 +97,7 @@ const preferencesSubSchema = new Schema<IUserPreferences>(
         "romantic",
         "motivational",
         "doctor",
+        "musician",
         "comedian",
         "senior_dev",
       ],

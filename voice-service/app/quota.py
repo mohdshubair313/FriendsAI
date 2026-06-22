@@ -47,6 +47,50 @@ log = logging.getLogger("quota")
 
 WINDOW_MS = 24 * 60 * 60 * 1000  # 24h
 
+# Lua script for atomic sliding-window quota check + record.
+# Runs server-side on Redis so there's zero chance of a race between
+# ZRANGE (read) and ZADD (write). Returns JSON-like array of integers.
+_QUOTA_LUA_SCRIPT = """
+local key = KEYS[1]
+local now = tonumber(ARGV[1])
+local cutoff = tonumber(ARGV[2])
+local window_ms = tonumber(ARGV[3])
+local new_units = tonumber(ARGV[4])
+local limit = tonumber(ARGV[5])
+
+-- Prune entries older than the sliding window
+redis.call('ZREMRANGEBYSCORE', key, 0, cutoff)
+
+-- Read remaining members + scores
+local members = redis.call('ZRANGE', key, 0, -1, 'WITHSCORES')
+local used = 0
+local oldest = now
+for i = 1, #members, 2 do
+    local val = tostring(members[i])
+    local score = tonumber(members[i+1])
+    local u_str = val:match('^(%d+)')
+    if u_str then
+        used = used + tonumber(u_str)
+    end
+    if score and score < oldest then
+        oldest = score
+    end
+end
+
+if used + new_units > limit then
+    return {0, used, limit, oldest + window_ms}
+end
+
+-- Record this request
+local member = tostring(new_units) .. ':' .. redis.sha1hex(tostring(now) .. tostring(math.random()))
+redis.call('ZADD', key, now, member)
+redis.call('EXPIRE', key, math.floor(window_ms / 1000) + 60)
+
+return {1, used + new_units, limit, oldest + window_ms}
+"""
+
+_QUOTA_LUA_SHA: str | None = None  # cached SHA for EVALSHA
+
 
 @dataclass
 class QuotaResult:
@@ -146,6 +190,30 @@ def _key(resource: str, user_id: str) -> str:
     return f"quota:{resource}:{user_id}"
 
 
+
+async def _eval_quota_script(key: str, now_ms: int, cutoff: int, units: int, limit: int) -> list[int] | None:
+    """
+    Send the atomic quota Lua script via EVAL or EVALSHA (if SHA cached).
+    Returns [allowed, used, limit, reset_at_ms] or None on failure.
+    """
+    global _QUOTA_LUA_SHA
+    args = [key, str(now_ms), str(cutoff), str(WINDOW_MS), str(units), str(limit)]
+
+    # Try EVALSHA first (saves bandwidth if script is already cached)
+    if _QUOTA_LUA_SHA:
+        result = await _upstash_cmd("EVALSHA", _QUOTA_LUA_SHA, "1", *args)
+        if result is not None:
+            return result  # type: ignore[return-value]
+
+    # Fall back to EVAL and cache the SHA
+    result = await _upstash_cmd("EVAL", _QUOTA_LUA_SCRIPT, "1", *args)
+    if isinstance(result, list) and len(result) >= 4:
+        # Try to cache SHA from EVAL response if Redis returns it
+        # (Upstash REST may not; we'll just use EVAL every time if EVALSHA fails)
+        pass
+    return result  # type: ignore[return-value]
+
+
 async def check_and_record(
     user_id: str,
     tier: str,
@@ -153,8 +221,10 @@ async def check_and_record(
     units: int,
 ) -> QuotaResult:
     """
-    Atomically check + record. Returns a QuotaResult — caller decides
-    to proceed (allowed=True) or return 429 (allowed=False).
+    Atomically check + record via a Redis Lua script (single round-trip).
+
+    Returns a QuotaResult — caller decides to proceed (allowed=True) or
+    return 429 (allowed=False).
 
     If Redis is unconfigured / unreachable, we FAIL OPEN — better to serve
     the user than to error their whole experience over a cache outage.
@@ -176,54 +246,29 @@ async def check_and_record(
     cutoff = now_ms - WINDOW_MS
     key = _key(resource, user_id)
 
-    # 1. Drop expired entries (anything older than 24h).
-    await _upstash_cmd("ZREMRANGEBYSCORE", key, "0", str(cutoff))
+    result = await _eval_quota_script(key, now_ms, cutoff, units, limit)
 
-    # 2. Read remaining members + their scores so we can compute current usage.
-    members = await _upstash_cmd("ZRANGE", key, "0", "-1", "WITHSCORES")
-    used = 0
-    oldest_score = now_ms  # fallback if no members
-    if isinstance(members, list):
-        # WITHSCORES returns [member, score, member, score, ...]
-        for i in range(0, len(members), 2):
-            value = str(members[i])
-            try:
-                # Stored as "<units>:<uuid>"
-                u_str = value.split(":", 1)[0]
-                used += int(u_str)
-            except (ValueError, IndexError):
-                # Corrupt entry — count as 0, don't crash.
-                continue
-            try:
-                score_val = int(float(members[i + 1]))
-                if score_val < oldest_score:
-                    oldest_score = score_val
-            except (ValueError, IndexError):
-                pass
-
-    reset_at_ms = oldest_score + WINDOW_MS
-
-    if used + units > limit:
+    if isinstance(result, list) and len(result) >= 4:
+        allowed = bool(result[0])
+        used = int(result[1])
+        effective_limit = int(result[2])
+        reset_at_ms = int(result[3])
         return QuotaResult(
-            allowed=False,
+            allowed=allowed,
             used=used,
-            limit=limit,
-            remaining=max(0, limit - used),
+            limit=effective_limit,
+            remaining=max(0, effective_limit - used),
             reset_at_ms=reset_at_ms,
             resource=resource,
         )
 
-    # 3. Record this request.
-    member = f"{units}:{uuid.uuid4().hex}"
-    await _upstash_cmd("ZADD", key, str(now_ms), member)
-    # 4. Refresh TTL so the key auto-cleans if the user goes dormant.
-    await _upstash_cmd("EXPIRE", key, str(WINDOW_MS // 1000 + 60))
-
+    # Lua script failed — fail open so a Redis hiccup doesn't break voice.
+    log.warning("[quota] Lua script failed — failing open for user=%s resource=%s", user_id, resource)
     return QuotaResult(
         allowed=True,
-        used=used + units,
+        used=0,
         limit=limit,
-        remaining=max(0, limit - used - units),
-        reset_at_ms=reset_at_ms,
+        remaining=limit,
+        reset_at_ms=int(time.time() * 1000) + WINDOW_MS,
         resource=resource,
     )

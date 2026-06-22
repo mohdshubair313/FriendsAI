@@ -73,6 +73,7 @@ export const generateSchema = z.object({
       "romantic",
       "motivational",
       "doctor",
+      "musician",
       "comedian",
       "senior_dev",
     ])
@@ -115,6 +116,7 @@ export const preferencesSchema = z.object({
     "romantic",
     "motivational",
     "doctor",
+    "musician",
     "comedian",
     "senior_dev",
   ]),
