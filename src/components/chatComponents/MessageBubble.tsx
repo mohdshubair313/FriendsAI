@@ -11,16 +11,18 @@ import {
   Volume2,
   Square as StopIcon,
 } from "lucide-react";
-import { useState, useEffect, useRef } from "react";
+import { memo, useState, useEffect, useRef, useMemo } from "react";
+import dynamic from "next/dynamic";
+import { AiStatus } from "@/components/ui/ai-status";
+import GeneratedImage from "@/components/ai/GeneratedImage";
+import { linkedSources, type ChatMessage } from "@/lib/chat/message-ui";
 import AgentTrace from "./AgentTrace";
 import MultimodalPart from "./MultimodalPart";
 import { cn } from "@/lib/utils";
 
-interface MessageBubbleProps {
-  role: "user" | "assistant" | "system";
-  content: string;
-  annotations?: any[];
-}
+const WebSearch = dynamic(() => import("@/components/ui/web-search").then((m) => m.WebSearch));
+const WebSearchCitation = dynamic(() => import("@/components/ui/web-search").then((m) => m.WebSearchCitation));
+type MessageBubbleProps = ChatMessage;
 
 /**
  * Strip markdown formatting so the SpeechSynthesis voice doesn't read
@@ -46,16 +48,23 @@ function plainTextForTTS(md: string): string {
     .trim();
 }
 
-export default function MessageBubble({ role, content, annotations }: MessageBubbleProps) {
+function MessageBubble({ role, content, annotations, status, image, search }: MessageBubbleProps) {
   const isUser = role === "user";
   const [copied, setCopied] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
 
-  const trace = annotations?.find((a) => a.type === "trace")?.data;
-  const intent = annotations?.find((a) => a.type === "intent")?.data;
-  const mood = annotations?.find((a) => a.type === "mood")?.data;
+  const textAnnotation = (type: string) => {
+    const value = annotations?.find((a) => a.type === type)?.data;
+    return typeof value === "string" ? value : undefined;
+  };
+  const trace = textAnnotation("trace");
+  const intent = textAnnotation("intent");
+  const mood = textAnnotation("mood");
   const imageUrl = annotations?.find((a) => a.type === "image")?.data;
+  const sources = useMemo(() => isUser ? [] : search?.sources ?? linkedSources(content), [content, isUser, search]);
+  const searching = !!search?.pending && (status === "researching" || status === "writing");
+  const imagePending = image && !image.url && (status === "generating" || status === "uploading");
 
   const handleCopy = () => {
     navigator.clipboard.writeText(content);
@@ -141,12 +150,29 @@ export default function MessageBubble({ role, content, annotations }: MessageBub
           // AI message: flush with page background, no bubble. Claude-style.
           <div className="text-zinc-100 text-[15px] leading-[1.7] break-words w-full">
             {(trace || intent) && <AgentTrace trace={trace} intent={intent} mood={mood} />}
+            {status && <AiStatus state={status} className="mb-2" states={{
+              generating: { label: "Creating your image", active: true },
+              uploading: { label: "Saving your image", active: true },
+              stopped: { label: "Stopped", active: false },
+              done: { label: "Complete", active: false },
+            }} />}
+
+            {(search || sources.length > 0) && <WebSearch sources={sources} status={searching ? "searching" : "done"}
+              label={searching ? "Checking the web" : !search ? `${sources.length} linked sources`
+                : status === "error" ? "Search could not complete" : status === "stopped" ? "Search stopped"
+                : sources.length ? `${sources.length} web ${sources.length === 1 ? "source" : "sources"}` : "No web sources returned"}
+              defaultOpen={true} className="mb-3 w-full font-sans" />}
 
             <ReactMarkdown
               className="prose prose-invert prose-sm max-w-none break-words prose-p:leading-[1.7] prose-p:my-3 prose-pre:bg-black/40 prose-pre:border prose-pre:border-white/10 prose-pre:rounded-2xl prose-code:text-indigo-300 prose-a:text-indigo-400 prose-a:no-underline hover:prose-a:underline prose-headings:font-semibold prose-headings:tracking-tight prose-li:my-1"
               remarkPlugins={[remarkGfm]}
               rehypePlugins={[rehypeRaw]}
               components={{
+                a({ href, children }) {
+                  const source = search?.sources.find((item) => item.url === href && item.id === String(children));
+                  return source ? <WebSearchCitation source={source} index={Number(source.id)} />
+                    : <a href={href} target="_blank" rel="noopener noreferrer">{children}</a>;
+                },
                 code({ className, children, ...props }) {
                   const match = /language-(\w+)/.exec(className || "");
                   return match ? (
@@ -171,7 +197,14 @@ export default function MessageBubble({ role, content, annotations }: MessageBub
               {content}
             </ReactMarkdown>
 
-            {imageUrl && <MultimodalPart type="image" url={imageUrl} />}
+            {search?.suggestionsHtml && <iframe title="Google Search suggestions"
+              sandbox="allow-popups allow-popups-to-escape-sandbox" referrerPolicy="no-referrer"
+              className="my-3 h-24 w-full rounded-xl border-0 bg-transparent"
+              srcDoc={`<!doctype html><html style="color-scheme:dark;background:#020202"><head><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src https: data:; base-uri 'none'; form-action 'none'"><base target="_blank"></head><body style="margin:0">${search.suggestionsHtml}</body></html>`} />}
+
+            {(image?.url || imagePending) && <GeneratedImage url={image!.url} prompt={image!.prompt}
+              caption={imagePending ? (status === "uploading" ? "Saving image…" : "Generating image…") : undefined} />}
+            {typeof imageUrl === "string" && !image && <MultimodalPart type="image" url={imageUrl} />}
           </div>
         )}
 
@@ -234,3 +267,5 @@ export default function MessageBubble({ role, content, annotations }: MessageBub
     </motion.div>
   );
 }
+
+export default memo(MessageBubble);

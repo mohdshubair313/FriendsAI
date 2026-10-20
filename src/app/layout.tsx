@@ -1,22 +1,7 @@
 import type { Metadata } from "next";
-import { Sora, Space_Grotesk, Geist, Instrument_Serif } from "next/font/google";
+import { Geist, Instrument_Serif } from "next/font/google";
 import "./globals.css";
-import { Toaster } from "@/components/ui/sonner";
-import { SessionProvider } from "@/context/SessionContext";
 import { Analytics } from '@vercel/analytics/next';
-import { StoreProvider } from "@/components/providers/StoreProvider";
-import MainShell from "@/components/shell/MainShell";
-
-const soraFont = Sora({
-  subsets: ["latin"],
-  variable: "--font-sora",
-  weight: "variable",
-});
-const spaceGroteskFont = Space_Grotesk({
-  subsets: ["latin"],
-  variable: "--font-space-grotesk",
-  weight: "variable",
-});
 const geistFont = Geist({
   subsets: ["latin"],
   variable: "--font-geist",
@@ -50,17 +35,10 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body
-        className={`${soraFont.variable} ${spaceGroteskFont.variable} ${geistFont.variable} ${instrumentSerifFont.variable} antialiased bg-black text-zinc-100 font-sans overflow-x-hidden`}
+        className={`${geistFont.variable} ${instrumentSerifFont.variable} antialiased bg-black text-zinc-100 font-sans overflow-x-hidden`}
       >
-        <StoreProvider>
-          <SessionProvider>
-            <MainShell>
-              {children}
-            </MainShell>
-          </SessionProvider>
-        </StoreProvider>
+        {children}
         <Analytics />
-        <Toaster theme="dark" position="top-right" closeButton richColors />
       </body>
     </html>
   );

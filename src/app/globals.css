@@ -363,3 +363,23 @@ body::after {
   .v2-aurora-soft { animation: none !important; }
   .v2-caret { animation: none !important; }
 }
+
+/* Keep the original hero entrance, but start at HTML/CSS paint, not hydration. */
+.v2-hero-title { animation: v2-hero-title 1.1s cubic-bezier(.16,1,.3,1) .1s both; }
+.v2-hero-description { animation: v2-hero-rise .8s cubic-bezier(.16,1,.3,1) .45s both; }
+.v2-hero-actions { animation: v2-hero-rise .8s cubic-bezier(.16,1,.3,1) .6s both; }
+.v2-hero-trust { animation: v2-hero-opacity 1s ease .9s both; }
+.v2-hero-eyebrow { animation: v2-hero-eyebrow .6s cubic-bezier(.16,1,.3,1) both; }
+@keyframes v2-hero-title { from { opacity: 0; transform: translateY(30px); filter: blur(8px); } to { opacity: 1; transform: none; filter: blur(0); } }
+@keyframes v2-hero-rise { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+@keyframes v2-hero-opacity { from { opacity: 0; } to { opacity: 1; } }
+@keyframes v2-hero-eyebrow { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
+@keyframes v2-marquee { to { transform: translateX(-100%); } }
+.v2-landing [id] { scroll-margin-top: 100px; }
+.v2-motion-root [data-animation-paused="true"] *,
+.v2-motion-root[data-page-hidden="true"] * { animation-play-state: paused !important; }
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .v2-landing *, .v2-landing *::before, .v2-landing *::after { animation: none !important; transition: none !important; }
+  .v2-landing [data-v2-reveal] { opacity: 1 !important; transform: none !important; }
+}

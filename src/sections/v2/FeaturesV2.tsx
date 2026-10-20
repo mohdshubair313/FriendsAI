@@ -1,7 +1,5 @@
-"use client";
-
 import { cn } from "@/lib/utils";
-import { motion, useInView } from "framer-motion";
+import { VoiceWaveform } from "@/components/v2/ui/VoiceWaveform";
 import * as React from "react";
 import { FadeInUp } from "@/components/v2/ui/FadeInUp";
 import { GlassPanel } from "@/components/v2/ui/GlassPanel";
@@ -292,41 +290,6 @@ function VoiceCard() {
       </CardBody>
       <VoiceWaveform />
     </CardShell>
-  );
-}
-
-function VoiceWaveform() {
-  const ref = React.useRef<HTMLDivElement>(null);
-  const inView = useInView(ref, { amount: 0.4 });
-  const bars = 36;
-  return (
-    <div ref={ref} className="mt-6 flex h-20 items-end gap-[3px]">
-      {Array.from({ length: bars }).map((_, i) => (
-        <motion.span
-          key={i}
-          className="w-[6px] rounded-sm bg-gradient-to-t from-violet-500/70 to-cyan-300/90"
-          initial={{ height: 4 }}
-          animate={
-            inView
-              ? {
-                  height: [
-                    6 + Math.abs(Math.sin((i + 1) * 0.7)) * 50,
-                    8 + Math.abs(Math.sin((i + 4) * 0.5)) * 60,
-                    4 + Math.abs(Math.sin((i + 7) * 0.9)) * 40,
-                  ],
-                }
-              : { height: 4 }
-          }
-          transition={{
-            duration: 1.6 + (i % 5) * 0.15,
-            repeat: Infinity,
-            repeatType: "mirror",
-            ease: "easeInOut",
-            delay: i * 0.02,
-          }}
-        />
-      ))}
-    </div>
   );
 }
 

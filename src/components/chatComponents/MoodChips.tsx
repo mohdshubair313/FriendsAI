@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 import { Sparkles } from "lucide-react";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { setMood, clearMood } from "@/store/slices/chatSlice";
-import { MOODS } from "@/app/chat/page";
+import { MOODS } from "@/lib/chat/moods";
 
 /**
  * Mood selector chips. The leading "Auto" chip clears the user's pick
@@ -16,7 +16,7 @@ export function MoodChips() {
   const selectedMood = useAppSelector((s) => s.chat.selectedMood);
 
   return (
-    <div className="flex gap-2 flex-wrap items-center justify-center px-4 py-2">
+    <div className="flex shrink-0 gap-2 overflow-x-auto items-center md:justify-center px-4 py-2 no-scrollbar [&>button]:shrink-0 [&>button]:whitespace-nowrap">
       <motion.button
         whileTap={{ scale: 0.95 }}
         whileHover={{ scale: 1.03 }}

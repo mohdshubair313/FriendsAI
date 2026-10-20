@@ -1,4 +1,5 @@
 import mongoose, { Schema, Types, Document } from "mongoose";
+import type { SearchResult } from "@/lib/chat/message-ui";
 
 // ─── Conversation ────────────────────────────────────────────────────────────
 export interface IConversation extends Document {
@@ -54,6 +55,7 @@ export interface IMessage extends Document {
   role: "user" | "assistant" | "tool" | "system";
   content: string; // Plain text fallback or combined parts
   parts: MessagePart[];
+  search?: SearchResult;
   
   // High-fidelity persistence for LangGraph
   rawLangChainMessage?: any; 
@@ -85,6 +87,14 @@ const messageSchema = new Schema<IMessage>(
     },
     content: { type: String, default: "" },
     parts: { type: Schema.Types.Mixed, required: true, default: [] },
+    search: {
+      type: new Schema({
+        sources: [{ _id: false, id: String, title: String, url: String }],
+        queries: [String],
+        suggestionsHtml: String,
+      }, { _id: false }),
+      default: undefined,
+    },
     
     rawLangChainMessage: { type: Schema.Types.Mixed },
     

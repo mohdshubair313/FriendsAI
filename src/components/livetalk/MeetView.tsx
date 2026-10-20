@@ -8,7 +8,7 @@ import BottomBar from "./BottomBar";
 import SidePanel from "./SidePanel";
 import type { BuddyPersona } from "@/models/userModel";
 import type { Expression } from "@/components/chatComponents/LiveTalkOverlay";
-import type { TranscriptTurn } from "@/app/live_talk/page";
+import type { TranscriptTurn } from "@/app/(app)/live_talk/page";
 
 type VoicePhase = "idle" | "listening" | "transcribing" | "thinking" | "speaking";
 

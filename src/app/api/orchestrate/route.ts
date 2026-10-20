@@ -14,6 +14,8 @@ import { generateImage, ImageGenerationError } from "@/lib/chat/generateImage";
 import { errMessage, isAbort } from "@/lib/errors";
 import { saveVoiceSession } from "@/lib/sessions/voiceSession";
 import { recordTurnMetric } from "@/lib/telemetry/voiceTelemetry";
+import type { SearchResult } from "@/lib/chat/message-ui";
+import { GeminiRequestError } from "@/lib/chat/gemini";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -181,6 +183,7 @@ export async function POST(req: NextRequest) {
     persona,
     voiceStyle,
     locale,
+    webSearch,
   } = parsed.data;
   const userId = token.id as string;
   const moodKey = mood ?? null;
@@ -265,6 +268,8 @@ export async function POST(req: NextRequest) {
         prompt?: string;
         phase?: "generating" | "uploading";
         error?: string;
+        search?: SearchResult;
+        code?: string;
       };
       const writer = (chunk: SseChunk) => {
         if (req.signal.aborted) return;
@@ -302,10 +307,12 @@ export async function POST(req: NextRequest) {
         log("→ chat branch (calling streamChat)");
         let acc = "";
         let ttftMs = 0;
+        let search: SearchResult | undefined;
         const tLlm = Date.now();
         // Wrap writer to capture time-to-first-token. The first {type:"token"}
         // event is by definition the moment the LLM started producing.
         const wrappedWriter: typeof writer = (chunk) => {
+          if (chunk.type === "search_done") search = chunk.search;
           if (ttftMs === 0 && chunk.type === "token") {
             ttftMs = Date.now() - tLlm;
           }
@@ -319,6 +326,7 @@ export async function POST(req: NextRequest) {
             persona: personaKey,
             signal: req.signal,
             writer: wrappedWriter,
+            webSearch,
           });
         } catch (err) {
           if (req.signal.aborted || isAbort(err)) {
@@ -338,6 +346,7 @@ export async function POST(req: NextRequest) {
             role: "assistant",
             content: acc,
             parts: [{ type: "text", text: acc }],
+            search,
           })
             .then(() => log("assistant msg saved"))
             .catch((e) => log("assistant msg save FAIL —", errMessage(e)));
@@ -380,7 +389,8 @@ export async function POST(req: NextRequest) {
         if (req.signal.aborted || isAbort(err)) return;
         const message = errMessage(err);
         log("handler ERROR —", message);
-        writer({ type: "error", content: message || "Server error" });
+        writer({ type: "error", content: message || "Server error",
+          code: err instanceof GeminiRequestError && err.status === 429 ? "provider_quota" : undefined });
         writer({ type: "token", content: FALLBACK_REPLY });
         writer({ type: "done" });
       } finally {

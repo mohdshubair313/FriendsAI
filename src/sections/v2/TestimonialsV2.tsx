@@ -1,7 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { motion, useScroll, useTransform } from "framer-motion";
+import { m, useScroll, useTransform } from "framer-motion";
 import * as React from "react";
 import { FadeInUp } from "@/components/v2/ui/FadeInUp";
 import { GlassPanel } from "@/components/v2/ui/GlassPanel";
@@ -90,14 +90,14 @@ export function TestimonialsV2() {
         </div>
 
         <div className="grid gap-5 md:grid-cols-2">
-          <motion.div style={{ y: drift }} className="grid gap-5">
+          <m.div style={{ y: drift }} className="grid gap-5">
             <Card t={items[0]} large />
             <Card t={items[2]} />
-          </motion.div>
-          <motion.div style={{ y: driftReverse }} className="grid gap-5 md:mt-16">
+          </m.div>
+          <m.div style={{ y: driftReverse }} className="grid gap-5 md:mt-16">
             <Card t={items[1]} />
             <Card t={items[3]} large />
-          </motion.div>
+          </m.div>
         </div>
       </div>
     </section>

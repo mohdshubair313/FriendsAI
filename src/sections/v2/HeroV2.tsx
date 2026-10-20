@@ -1,26 +1,8 @@
-"use client";
-
 import { cn } from "@/lib/utils";
-import { motion } from "framer-motion";
-import dynamic from "next/dynamic";
+import { HeroScene } from "@/components/v2/webgl/HeroScene";
 import * as React from "react";
 import { MagneticButton } from "@/components/v2/ui/MagneticButton";
 import { AuroraBackground } from "@/components/v2/ui/AuroraBackground";
-
-const SceneCanvas = dynamic(
-  () => import("@/components/v2/webgl/SceneCanvas").then((m) => m.SceneCanvas),
-  {
-    ssr: false,
-    loading: () => (
-      <div
-        aria-hidden
-        className="absolute inset-0 grid place-items-center"
-      >
-        <div className="h-40 w-40 rounded-full bg-[radial-gradient(circle,rgba(99,102,241,0.35),transparent_60%)] blur-2xl animate-[v2-float_4s_ease-in-out_infinite]" />
-      </div>
-    ),
-  }
-);
 
 export function HeroV2() {
   return (
@@ -33,20 +15,17 @@ export function HeroV2() {
       <div className="v2-spotlight" />
 
       {/* WebGL torus, behind content */}
-      <SceneCanvas
+      <HeroScene
         className="pointer-events-none absolute inset-0 -z-[1] [mask-image:radial-gradient(ellipse_70%_60%_at_50%_45%,black,transparent_75%)]"
       />
 
       <div className="relative z-[2] mx-auto flex max-w-7xl flex-col items-center px-5 text-center md:px-8">
         <Eyebrow />
 
-        <motion.h1
+        <h1
           id="hero-heading"
-          initial={{ opacity: 0, y: 30, filter: "blur(8px)" }}
-          animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-          transition={{ duration: 1.1, ease: [0.16, 1, 0.3, 1], delay: 0.1 }}
           className={cn(
-            "v2-font-display v2-text-display mt-7 max-w-[18ch] text-balance",
+            "v2-hero-title v2-font-display v2-text-display mt-7 max-w-[18ch] text-balance",
             "text-white"
           )}
         >
@@ -56,24 +35,18 @@ export function HeroV2() {
           </em>
           ,
           <br className="hidden md:inline" /> not at you.
-        </motion.h1>
+        </h1>
 
-        <motion.p
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1], delay: 0.45 }}
-          className="v2-font-sans mt-7 max-w-[58ch] text-balance text-[15px] leading-relaxed text-white/65 md:text-[17px]"
+        <p
+          className="v2-hero-description v2-font-sans mt-7 max-w-[58ch] text-balance text-[15px] leading-relaxed text-white/65 md:text-[17px]"
         >
           Friends AI is a multimodal companion built on a LangGraph-orchestrated
           agent stack. Talk, see, generate, and meet a live avatar — all under
           one roof, all latency-tuned, all yours.
-        </motion.p>
+        </p>
 
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1], delay: 0.6 }}
-          className="mt-10 flex flex-col items-center gap-3 sm:flex-row"
+        <div
+          className="v2-hero-actions mt-10 flex flex-col items-center gap-3 sm:flex-row"
         >
           <MagneticButton
             asLink
@@ -94,13 +67,10 @@ export function HeroV2() {
           >
             See the live avatar
           </MagneticButton>
-        </motion.div>
+        </div>
 
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 1, delay: 0.9 }}
-          className="mt-14 flex flex-col items-center gap-3 text-[12px] text-white/40 md:flex-row md:gap-6"
+        <div
+          className="v2-hero-trust mt-14 flex flex-col items-center gap-3 text-[12px] text-white/40 md:flex-row md:gap-6"
         >
           <span className="inline-flex items-center gap-2">
             <PulseDot />
@@ -108,7 +78,7 @@ export function HeroV2() {
           </span>
           <span className="hidden h-3 w-px bg-white/15 md:block" />
           <span>SOC2-aligned · Encrypted at rest · No training on your chats</span>
-        </motion.div>
+        </div>
       </div>
 
       {/* Bottom fade-out into next section */}
@@ -122,13 +92,10 @@ export function HeroV2() {
 
 function Eyebrow() {
   return (
-    <motion.a
+    <a
       href="#features"
-      initial={{ opacity: 0, y: -8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
       className={cn(
-        "group inline-flex items-center gap-2 rounded-full v2-glass px-3 py-1.5",
+        "v2-hero-eyebrow group inline-flex items-center gap-2 rounded-full v2-glass px-3 py-1.5",
         "v2-text-eyebrow text-white/75 transition-colors duration-200 hover:text-white",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
       )}
@@ -144,7 +111,7 @@ function Eyebrow() {
         Multi-agent orchestration is live
       </span>
       <ChevronRight />
-    </motion.a>
+    </a>
   );
 }
 

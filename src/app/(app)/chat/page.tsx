@@ -12,27 +12,15 @@ import ChatNavbar from "@/components/chatComponents/ChatNavbar";
 import ChatInput from "@/components/chatComponents/ChatInput";
 import MessageList from "@/components/chatComponents/MessageList";
 import EmptyState from "@/components/chatComponents/EmptyState";
-import VoiceMode from "@/components/chatComponents/VoiceMode";
+import nextDynamic from "next/dynamic";
+import type { ChatMessage, SearchResult } from "@/lib/chat/message-ui";
 import { MoodChips } from "@/components/chatComponents/MoodChips";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { fetchPremiumStatus } from "@/store/slices/premiumSlice";
 import { sounds } from "@/lib/sounds";
 
-export const MOODS = [
-  { id: "friendly",      label: "Friendly",       emoji: "😊" },
-  { id: "happy",         label: "Happy",           emoji: "😄" },
-  { id: "sad",           label: "Sad",             emoji: "😢" },
-  { id: "funny",         label: "Funny",           emoji: "😂" },
-  { id: "motivational",  label: "Motivational",    emoji: "💪" },
-  { id: "romantic",      label: "Romantic",        emoji: "💝" },
-  { id: "philosophical", label: "Philosophical",   emoji: "🧠" },
-  { id: "angry",         label: "Calm me down",    emoji: "😤" },
-];
-
-type ChatMsg = {
-  role: "user" | "assistant" | "system";
-  content: string;
-};
+type ChatMsg = ChatMessage;
+const VoiceMode = nextDynamic(() => import("@/components/chatComponents/VoiceMode"), { ssr: false });
 
 /**
  * SSE event types emitted by /api/orchestrate.
@@ -43,11 +31,13 @@ type SseEvent =
   | { type: "start"; mode?: "chat" | "image" }
   | { type: "conversation"; id: string }
   | { type: "token"; content: string }
+  | { type: "search_start" }
+  | { type: "search_done"; content: string; search: SearchResult }
   | { type: "image_progress"; phase: "generating" | "uploading" }
   | { type: "image_done"; url: string; prompt: string }
   | { type: "image_failed"; error: string }
   | { type: "aborted" }
-  | { type: "error"; content?: string }
+  | { type: "error"; content?: string; code?: string }
   | { type: "done" };
 
 /**
@@ -60,6 +50,7 @@ type StoredMessage = {
   content: string;
   imageUrl: string | null;
   createdAt: string;
+  search?: SearchResult;
 };
 
 /**
@@ -76,6 +67,7 @@ function dispatchConversationsInvalidate() {
 function ChatPageInner() {
   const [isVoiceModeOpen, setIsVoiceModeOpen] = useState(false);
   const [input, setInput] = useState("");
+  const [webSearch, setWebSearch] = useState(true);
 
   const { status: sessionStatus } = useSession();
   const dispatch = useAppDispatch();
@@ -94,10 +86,6 @@ function ChatPageInner() {
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
-  // `streamMode` powers MessageList's "Thinking…" pulse.
-  // For "image" mode the assistant slot shows its own progress text, so
-  // the pulse is suppressed.
-  const [streamMode, setStreamMode] = useState<"chat" | "image" | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const conversationIdRef = useRef<string | null>(null);
 
@@ -109,6 +97,9 @@ function ChatPageInner() {
 
   // ─── Load history when ?c=ID changes ──────────────────────────────────
   useEffect(() => {
+    // The server just minted this conversation; keep the streaming message in place.
+    if (conversationIdFromUrl && conversationIdFromUrl === conversationIdRef.current && abortRef.current) return;
+    abortRef.current?.abort();
     if (!conversationIdFromUrl) {
       // Switched to a fresh /chat — wipe the slate.
       setMessages([]);
@@ -136,13 +127,14 @@ function ChatPageInner() {
         const formatted: ChatMsg[] = stored
           .filter((m) => m.role === "user" || m.role === "assistant")
           .map((m) => ({
+            id: m.id,
             role: m.role as "user" | "assistant",
             // Inline the image URL into the markdown body so MessageBubble's
             // existing markdown renderer picks it up — same shape that
             // live image generations emit.
-            content: m.imageUrl
-              ? `${m.content}\n\n![image](${m.imageUrl})`
-              : m.content,
+            content: m.content,
+            image: m.imageUrl ? { url: m.imageUrl, prompt: m.content } : undefined,
+            search: m.search,
           }));
         setMessages(formatted);
       })
@@ -174,36 +166,36 @@ function ChatPageInner() {
   // ─── Submit pipeline ─────────────────────────────────────────────────
   const runChat = useCallback(
     async (userText: string) => {
-      const userMessage: ChatMsg = { role: "user", content: userText };
-
-      let assistantIdx = -1;
-      setMessages((prev) => {
-        const next = [...prev, userMessage, { role: "assistant" as const, content: "" }];
-        assistantIdx = next.length - 1;
-        return next;
-      });
-
-      const updateAssistant = (content: string) => {
-        setMessages((prev) => {
-          const next = [...prev];
-          if (next[assistantIdx]?.role === "assistant") {
-            next[assistantIdx] = { ...next[assistantIdx], content };
-          }
-          return next;
-        });
+      if (abortRef.current) return;
+      const userMessage: ChatMsg = { id: crypto.randomUUID(), role: "user", content: userText };
+      const assistantId = crypto.randomUUID();
+      setMessages((prev) => [...prev, userMessage, {
+        id: assistantId, role: "assistant", content: "", status: "thinking",
+      }]);
+      const updateAssistant = (patch: Partial<ChatMsg>) => {
+        setMessages((prev) => prev.map((message) => message.id === assistantId ? { ...message, ...patch } : message));
       };
 
       const ac = new AbortController();
       abortRef.current = ac;
       setIsLoading(true);
-      setStreamMode(null);
+      let acc = "";
+      let tokenFrame = 0;
+      let terminal = false;
+      const flushTokens = () => {
+        cancelAnimationFrame(tokenFrame);
+        tokenFrame = 0;
+        if (acc) updateAssistant({ content: acc });
+      };
 
       try {
         const res = await fetch("/api/orchestrate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            messages: [userMessage],
+            messages: [...messages.filter((message) => message.content && !message.image && message.status !== "error" && message.status !== "stopped").slice(-19), userMessage]
+              .map(({ role, content }) => ({ role, content })),
+            webSearch,
             mood: selectedMood,
             persona: selectedPersona,
             conversationId: conversationIdRef.current,
@@ -220,7 +212,6 @@ function ChatPageInner() {
         const reader = res.body.getReader();
         const decoder = new TextDecoder();
         let buffer = "";
-        let acc = "";
 
         readLoop: while (true) {
           const { done, value } = await reader.read();
@@ -245,9 +236,8 @@ function ChatPageInner() {
 
             switch (evt.type) {
               case "start":
-                if (evt.mode) setStreamMode(evt.mode);
                 if (evt.mode === "image") {
-                  updateAssistant("🎨 Sending your prompt to the image model…");
+                  updateAssistant({ status: "generating", image: { url: null, prompt: userText } });
                 }
                 break;
 
@@ -266,67 +256,82 @@ function ChatPageInner() {
 
               case "token":
                 acc += evt.content;
-                updateAssistant(acc);
+                if (!tokenFrame) tokenFrame = requestAnimationFrame(() => {
+                  tokenFrame = 0;
+                  updateAssistant({ content: acc, status: "writing" });
+                });
+                break;
+
+              case "search_start":
+                updateAssistant({ status: "researching", search: { sources: [], queries: [], pending: true } });
+                break;
+
+              case "search_done":
+                cancelAnimationFrame(tokenFrame);
+                tokenFrame = 0;
+                acc = evt.content;
+                updateAssistant({ content: acc, search: evt.search, status: "writing" });
                 break;
 
               case "image_progress":
-                updateAssistant(
-                  evt.phase === "generating"
-                    ? "🎨 Generating your image…"
-                    : "📤 Uploading…"
-                );
+                updateAssistant({ status: evt.phase, image: { url: null, prompt: userText } });
                 break;
 
               case "image_done":
-                updateAssistant(
-                  `Here's your image — _${evt.prompt}_\n\n![${evt.prompt}](${evt.url})`
-                );
+                updateAssistant({ content: evt.prompt, status: "done", image: { url: evt.url, prompt: evt.prompt } });
                 break;
 
               case "image_failed":
-                updateAssistant(`❌ ${evt.error}`);
+                terminal = true;
+                updateAssistant({ status: "error", content: evt.error, image: undefined });
                 break;
 
               case "aborted":
+                terminal = true;
+                flushTokens();
+                updateAssistant({ status: "stopped" });
                 break readLoop;
 
               case "error":
-                console.error("[chat] stream error:", evt.content);
-                break;
+                terminal = true;
+                flushTokens();
+                updateAssistant({ status: "error", content: evt.code === "provider_quota"
+                  ? `${acc ? acc + "\n\n" : ""}Gemini's quota or rate limit has been reached. Try again later, or switch Search off to use the chat fallback.`
+                  : acc || "The response failed. Please try again." });
+                break readLoop;
 
               case "done":
+                flushTokens();
+                if (!terminal) updateAssistant({ status: "done" });
+                terminal = true;
                 // Conversation's updatedAt was just bumped server-side —
                 // tell the sidebar so this conversation moves to the top.
                 dispatchConversationsInvalidate();
-                break;
+                break readLoop;
             }
           }
         }
+        if (!terminal) {
+          flushTokens();
+          updateAssistant({ status: "error", content: acc || "The connection ended before the response completed. Please try again." });
+        }
       } catch (err) {
+        flushTokens();
         if ((err as { name?: string })?.name === "AbortError") {
           // User pressed Stop — append a soft "(stopped)" marker to whatever
           // partial response we already streamed.
-          setMessages((prev) => {
-            const next = [...prev];
-            const last = next[next.length - 1];
-            if (last?.role === "assistant") {
-              next[next.length - 1] = {
-                ...last,
-                content: last.content + (last.content ? "\n\n_(stopped)_" : "_(stopped)_"),
-              };
-            }
-            return next;
-          });
+          updateAssistant({ status: "stopped" });
         } else {
           console.error("[chat] failed:", err);
-          updateAssistant("Sorry — something went wrong. Please try again.");
+          updateAssistant({ status: "error", content: acc || "Sorry — something went wrong. Please try again." });
         }
       } finally {
+        cancelAnimationFrame(tokenFrame);
         setIsLoading(false);
         abortRef.current = null;
       }
     },
-    [selectedMood, selectedPersona]
+    [selectedMood, selectedPersona, messages, webSearch]
   );
 
   const handleSubmitCallback = useCallback(
@@ -383,7 +388,7 @@ function ChatPageInner() {
     );
   } else {
     mainContent = (
-      <MessageList messages={messages} isLoading={isLoading} mode={streamMode} />
+      <MessageList messages={messages} isLoading={isLoading} />
     );
   }
 
@@ -406,6 +411,8 @@ function ChatPageInner() {
         onVoiceClick={() => { sounds.playClick(); setIsVoiceModeOpen(true); }}
         onStop={handleStop}
         selectedMood={selectedMood ?? undefined}
+        webSearch={webSearch}
+        onWebSearchChange={setWebSearch}
       />
 
       <AnimatePresence>

@@ -1,7 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { motion, useInView, type HTMLMotionProps } from "framer-motion";
+import { m, useInView, useReducedMotion, type HTMLMotionProps } from "framer-motion";
 import * as React from "react";
 
 interface FadeInUpProps extends Omit<HTMLMotionProps<"div">, "ref"> {
@@ -16,7 +16,7 @@ interface FadeInUpProps extends Omit<HTMLMotionProps<"div">, "ref"> {
 }
 
 /**
- * Scroll-triggered fade + lift. Honours prefers-reduced-motion.
+ * Scroll-triggered fade + lift. Honours prefers-reduced-m.
  * Uses transform-only animation for 60fps+ on scroll.
  */
 export function FadeInUp({
@@ -32,16 +32,18 @@ export function FadeInUp({
 }: FadeInUpProps) {
   const ref = React.useRef<HTMLDivElement>(null);
   const inView = useInView(ref, { once, amount });
-  const Tag = motion[as] as typeof motion.div;
+  const reduced = useReducedMotion();
+  const Tag = m[as] as typeof m.div;
 
   return (
     <Tag
+      data-v2-reveal
       ref={ref}
       initial={{ opacity: 0, y }}
-      animate={inView ? { opacity: 1, y: 0 } : { opacity: 0, y }}
+      animate={inView || reduced ? { opacity: 1, y: 0 } : { opacity: 0, y }}
       transition={{
-        duration,
-        delay,
+        duration: reduced ? 0 : duration,
+        delay: reduced ? 0 : delay,
         ease: [0.16, 1, 0.3, 1],
       }}
       className={cn(className)}

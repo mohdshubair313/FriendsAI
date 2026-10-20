@@ -11,7 +11,7 @@ import {
   ArrowRight,
   Zap,
   Globe,
-  Plus
+  type LucideIcon
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
@@ -136,7 +136,7 @@ export default function CommandBar() {
       {/* Floating Launcher Trigger (Subtle) */}
       <button 
         onClick={() => setIsOpen(true)}
-        className="fixed bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 backdrop-blur-md text-zinc-400 hover:text-white hover:bg-white/10 transition-all z-[90] group shadow-2xl"
+        className="fixed bottom-4 left-4 hidden md:flex items-center gap-2 px-4 py-2 rounded-full bg-zinc-900 border border-white/10 text-zinc-400 hover:text-white hover:bg-zinc-800 transition-all z-40 group shadow-2xl"
       >
         <Command className="size-4 group-hover:scale-110 transition-transform" />
         <span className="text-xs font-medium tracking-tight">Press <kbd className="mx-1 font-sans font-bold">⌘K</kbd> to explore</span>
@@ -145,7 +145,9 @@ export default function CommandBar() {
   );
 }
 
-function CommandItem({ icon: Icon, label, shortcut, onClick }: any) {
+function CommandItem({ icon: Icon, label, shortcut, onClick }: {
+  icon: LucideIcon; label: string; shortcut?: string; onClick: () => void;
+}) {
   return (
     <button
       onClick={onClick}

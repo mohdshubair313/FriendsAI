@@ -22,7 +22,7 @@ export default function ChatNavbar({ isPremium = false }: ChatNavbarProps) {
       initial={{ opacity: 0, y: -16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, ease: "easeOut" }}
-      className="shrink-0 z-50 w-full px-4 py-2 backdrop-blur-xl bg-stone-950/80 border-b border-stone-800/60 flex items-center justify-between"
+      className="shrink-0 z-50 w-full pl-14 pr-4 md:px-4 py-2 backdrop-blur-xl bg-stone-950/80 border-b border-stone-800/60 flex items-center justify-between"
     >
       {/* Left: Brand */}
       <div className="flex items-center gap-3">

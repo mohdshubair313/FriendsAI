@@ -49,6 +49,7 @@ function isValidContentType(content: any): boolean {
 // ─── Chat Generate Schema ───────────────────────────────────────────────────
 
 export const generateSchema = z.object({
+  webSearch: z.boolean().optional().default(false),
   messages: z.array(z.any())
     .min(1, "At least one message required")
     .max(50, "Maximum 50 messages per request"),

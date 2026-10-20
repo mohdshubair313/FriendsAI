@@ -3,6 +3,7 @@ import { BaseMessage, SystemMessage, HumanMessage, AIMessage } from "@langchain/
 import { getProviderApiKey } from "@/services/providers/registry";
 import { errMessage } from "@/lib/errors";
 import { buildChatSystemPrompt } from "./systemPrompt";
+import { geminiApiKey, streamGemini, type GeminiEvent } from "./gemini";
 
 /**
  * Direct LLM streaming for the chat path.
@@ -21,7 +22,7 @@ import { buildChatSystemPrompt } from "./systemPrompt";
  *      can pinpoint slowness in dev (provider latency vs internal work).
  */
 
-export type StreamWriter = (chunk: { type: string; content?: string }) => void;
+export type StreamWriter = (chunk: GeminiEvent) => void;
 
 export interface StreamChatOptions {
   messages: BaseMessage[];
@@ -32,6 +33,7 @@ export interface StreamChatOptions {
   persona?: string | null;
   signal?: AbortSignal;          // tied to request signal for stop button
   writer: StreamWriter;          // pushes `{ type: "token", content }` events
+  webSearch?: boolean;
 }
 
 const FALLBACK_REPLY =
@@ -328,6 +330,21 @@ async function tryOneModel(
  * actually produces tokens. Returns the full assistant text.
  */
 export async function streamChat(opts: StreamChatOptions): Promise<string> {
+  // Gemini supplies both the LLM and its native Google Search tool. A search
+  // failure must be visible, never silently presented as a grounded answer.
+  if (opts.webSearch) return streamGemini(opts);
+  if (geminiApiKey()) {
+    let emitted = false;
+    try {
+      return await streamGemini({ ...opts, writer: (event) => {
+        if (event.type === "token") emitted = true;
+        opts.writer(event);
+      } });
+    } catch (error) {
+      if (emitted || opts.signal?.aborted) throw error;
+      console.warn("[streamChat] Gemini unavailable; trying existing chat fallback providers.");
+    }
+  }
   const { messages, mood, expression, persona, signal, writer } = opts;
   const t0 = Date.now();
 

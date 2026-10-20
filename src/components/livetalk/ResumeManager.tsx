@@ -8,7 +8,7 @@ import { setVoiceStyle } from "@/store/slices/voiceSlice";
 import { isValidPair } from "@/lib/locale/catalog";
 import type { BuddyPersona } from "@/models/userModel";
 import type { VoiceStyleId } from "@/lib/voices/catalog";
-import type { TranscriptTurn } from "@/app/live_talk/page";
+import type { TranscriptTurn } from "@/app/(app)/live_talk/page";
 
 /**
  * Renderless component that hydrates the live-talk session from server state.

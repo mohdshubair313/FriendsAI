@@ -1,14 +1,18 @@
 "use client";
 
 import { cn } from "@/lib/utils";
+import Link from "next/link";
 import {
-  motion,
+  m,
   useMotionValue,
   useSpring,
   useTransform,
+  useReducedMotion,
   type HTMLMotionProps,
 } from "framer-motion";
 import * as React from "react";
+
+const MotionLink = m.create(Link);
 
 type Variant = "primary" | "secondary" | "ghost";
 type Size = "sm" | "md" | "lg";
@@ -69,6 +73,7 @@ export function MagneticButton(props: MagneticButtonProps) {
   } = props;
 
   const ref = React.useRef<HTMLElement | null>(null);
+  const bounds = React.useRef<DOMRect | null>(null);
   const x = useMotionValue(0);
   const y = useMotionValue(0);
   const sx = useSpring(x, { stiffness: 320, damping: 22, mass: 0.6 });
@@ -79,7 +84,7 @@ export function MagneticButton(props: MagneticButtonProps) {
     if (reduce) return;
     const el = ref.current;
     if (!el) return;
-    const rect = el.getBoundingClientRect();
+    const rect = bounds.current ?? (bounds.current = el.getBoundingClientRect());
     const cx = rect.left + rect.width / 2;
     const cy = rect.top + rect.height / 2;
     const dx = (e.clientX - cx) / (rect.width / 2);
@@ -88,6 +93,7 @@ export function MagneticButton(props: MagneticButtonProps) {
     y.set(dy * strength);
   };
   const onLeave = () => {
+    bounds.current = null;
     x.set(0);
     y.set(0);
   };
@@ -114,22 +120,24 @@ export function MagneticButton(props: MagneticButtonProps) {
           <span className="absolute -inset-y-2 left-0 w-1/3 bg-gradient-to-r from-transparent via-white/40 to-transparent opacity-0 group-hover:opacity-100 group-hover:[animation:v2-shine_900ms_ease-in-out]" />
         </span>
       )}
-      <motion.span
+      <m.span
         style={{ x: innerX, y: innerY }}
         className="relative z-[1] inline-flex items-center gap-2"
       >
         {iconLeft && <span className="flex shrink-0">{iconLeft}</span>}
         <span>{children}</span>
         {iconRight && <span className="flex shrink-0">{iconRight}</span>}
-      </motion.span>
+      </m.span>
     </>
   );
 
   if (props.asLink) {
+    const Anchor = props.href.startsWith("/") ? MotionLink : m.a;
     const { asLink: _, variant: __, size: ___, strength: ____, ariaLabel: _____, iconLeft: ______, iconRight: _______, className: ________, children: _________, ...anchorRest } = props;
     void _; void __; void ___; void ____; void _____; void ______; void _______; void ________; void _________;
     return (
-      <motion.a
+      <Anchor
+        {...(props.href.startsWith("/") ? { prefetch: false } : {})}
         ref={ref as React.RefObject<HTMLAnchorElement>}
         onMouseMove={onMove}
         onMouseLeave={onLeave}
@@ -141,14 +149,14 @@ export function MagneticButton(props: MagneticButtonProps) {
         {...anchorRest}
       >
         {inner}
-      </motion.a>
+      </Anchor>
     );
   }
 
   const { asLink: _, variant: __, size: ___, strength: ____, ariaLabel: _____, iconLeft: ______, iconRight: _______, className: ________, children: _________, ...buttonRest } = props;
   void _; void __; void ___; void ____; void _____; void ______; void _______; void ________; void _________;
   return (
-    <motion.button
+    <m.button
       ref={ref as React.RefObject<HTMLButtonElement>}
       onMouseMove={onMove}
       onMouseLeave={onLeave}
@@ -160,18 +168,6 @@ export function MagneticButton(props: MagneticButtonProps) {
       {...buttonRest}
     >
       {inner}
-    </motion.button>
+    </m.button>
   );
-}
-
-function useReducedMotion() {
-  const [reduced, setReduced] = React.useState(false);
-  React.useEffect(() => {
-    const m = window.matchMedia("(prefers-reduced-motion: reduce)");
-    setReduced(m.matches);
-    const handler = (e: MediaQueryListEvent) => setReduced(e.matches);
-    m.addEventListener("change", handler);
-    return () => m.removeEventListener("change", handler);
-  }, []);
-  return reduced;
 }

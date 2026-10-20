@@ -1,5 +1,3 @@
-"use client";
-
 import * as React from "react";
 import { Marquee } from "@/components/v2/ui/Marquee";
 import { FadeInUp } from "@/components/v2/ui/FadeInUp";

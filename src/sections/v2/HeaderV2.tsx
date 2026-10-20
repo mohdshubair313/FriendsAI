@@ -1,6 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
+import Link from "next/link";
 import * as React from "react";
 import { MagneticButton } from "@/components/v2/ui/MagneticButton";
 
@@ -13,6 +14,8 @@ const navItems = [
 
 export function HeaderV2() {
   const [scrolled, setScrolled] = React.useState(false);
+  const [menuOpen, setMenuOpen] = React.useState(false);
+  const menuButton = React.useRef<HTMLButtonElement>(null);
   const sentinelRef = React.useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
@@ -20,11 +23,23 @@ export function HeaderV2() {
     if (!el) return;
     const obs = new IntersectionObserver(
       ([entry]) => setScrolled(!entry.isIntersecting),
-      { threshold: 0, rootMargin: "0px 0px -100% 0px" }
+      { threshold: 0 }
     );
     obs.observe(el);
     return () => obs.disconnect();
   }, []);
+
+  React.useEffect(() => {
+    if (!menuOpen) return;
+    const close = (event: KeyboardEvent) => {
+      if (event.key === "Escape") { setMenuOpen(false); menuButton.current?.focus(); }
+    };
+    const media = window.matchMedia("(min-width: 768px)");
+    const resize = () => { if (media.matches) setMenuOpen(false); };
+    document.addEventListener("keydown", close);
+    media.addEventListener("change", resize);
+    return () => { document.removeEventListener("keydown", close); media.removeEventListener("change", resize); };
+  }, [menuOpen]);
 
   return (
     <>
@@ -83,8 +98,15 @@ export function HeaderV2() {
             >
               Get started
             </MagneticButton>
+            <button ref={menuButton} type="button" aria-label={menuOpen ? "Close navigation" : "Open navigation"} aria-expanded={menuOpen} aria-controls="mobile-navigation" onClick={() => setMenuOpen(!menuOpen)} className="grid size-10 place-items-center rounded-full border border-white/15 text-white md:hidden">
+              <svg width="18" height="18" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d={menuOpen ? "M5 5l10 10M15 5L5 15" : "M3 6h14M3 10h14M3 14h14"} stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>
+            </button>
           </div>
         </div>
+        <nav id="mobile-navigation" aria-label="Mobile navigation" hidden={!menuOpen} className="border-t border-white/10 bg-black/95 px-5 py-3 md:!hidden">
+          {navItems.map(item => <a key={item.href} href={item.href} onClick={() => setMenuOpen(false)} className="block rounded-lg px-3 py-3 text-sm text-white/80">{item.label}</a>)}
+          <Link href="/signin" prefetch={false} className="block px-3 py-3 text-sm text-white" onClick={() => setMenuOpen(false)}>Sign in</Link>
+        </nav>
       </header>
     </>
   );
@@ -92,8 +114,9 @@ export function HeaderV2() {
 
 function Brand() {
   return (
-    <a
-      href="/v2"
+    <Link
+      href="/"
+      prefetch={false}
       aria-label="Friends AI — home"
       className="group flex items-center gap-2.5 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-white/40"
     >
@@ -105,7 +128,7 @@ function Brand() {
       <span className="v2-font-sans text-[15px] font-semibold tracking-tight text-white">
         Friends<span className="text-white/50">.ai</span>
       </span>
-    </a>
+    </Link>
   );
 }
 

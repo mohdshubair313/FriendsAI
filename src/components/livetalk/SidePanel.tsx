@@ -7,7 +7,7 @@ import { Mic, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PERSONAS } from "@/lib/chat/personas";
 import type { BuddyPersona } from "@/models/userModel";
-import type { TranscriptTurn } from "@/app/live_talk/page";
+import type { TranscriptTurn } from "@/app/(app)/live_talk/page";
 
 interface SidePanelProps {
   open: boolean;

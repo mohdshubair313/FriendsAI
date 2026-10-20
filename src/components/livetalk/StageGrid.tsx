@@ -7,6 +7,9 @@ import UserCameraTile from "./UserCameraTile";
 import { PERSONAS } from "@/lib/chat/personas";
 import type { BuddyPersona } from "@/models/userModel";
 import type { Expression, PersonaGlow } from "@/components/chatComponents/LiveTalkOverlay";
+import VoiceOrb from "@/components/ai/VoiceOrb";
+import MatrixOrb from "@/components/ui/matrix-orb";
+import { AiStatus } from "@/components/ui/ai-status";
 
 export type StageMode = "sphere" | "avatar";
 
@@ -81,6 +84,7 @@ export default function StageGrid({
           </div>
         ) : (
           <SphereStage
+            thinking={phaseLabel.toLowerCase().includes("think")}
             audioLevel={isModelSpeaking ? outputAudioLevel : audioLevel}
             speaking={isModelSpeaking}
             personaGlow={personaGlow}
@@ -100,9 +104,8 @@ export default function StageGrid({
             />
           </div>
           <div className="px-2.5 py-1 rounded-lg bg-black/60 backdrop-blur-md border border-white/5">
-            <span className="text-[10px] uppercase tracking-widest font-bold text-zinc-300">
-              {phaseLabel}
-            </span>
+            <AiStatus state={phaseLabel.toLowerCase().includes("think") ? "thinking" : "voice"}
+              label={phaseLabel} timer={false} states={{ voice: { active: false } }} />
           </div>
         </div>
       </div>
@@ -151,10 +154,12 @@ export default function StageGrid({
 // ─── Inline sphere fallback (lighter than full LiveTalkOverlay) ──────────────
 
 function SphereStage({
+  thinking,
   audioLevel,
   speaking,
   personaGlow,
 }: {
+  thinking: boolean;
   audioLevel: number;
   speaking: boolean;
   personaGlow: PersonaGlow;
@@ -165,28 +170,17 @@ function SphereStage({
     <motion.div
       animate={{ scale }}
       transition={{ type: "spring", stiffness: 200, damping: 18 }}
-      className="relative size-[340px] md:size-[420px]"
+      className="relative w-[min(65vw,340px)] md:w-[420px] aspect-square"
     >
       <div
         className="absolute -inset-12 rounded-full blur-3xl opacity-60"
         style={{ background: `radial-gradient(circle, ${color}55, transparent 70%)` }}
       />
-      <motion.div
-        animate={{ rotate: 360 }}
-        transition={{ repeat: Infinity, duration: speaking ? 6 : 12, ease: "linear" }}
-        className="absolute inset-0 rounded-full overflow-hidden"
-        style={{
-          background: `conic-gradient(from 0deg, ${color}, ${color}cc, ${color})`,
-          filter: "blur(6px) saturate(1.4)",
-        }}
-      />
-      <div
-        className="absolute inset-0 rounded-full pointer-events-none"
-        style={{
-          background:
-            "radial-gradient(circle at 32% 28%, rgba(255,255,255,0.45) 0%, transparent 55%)",
-        }}
-      />
+      <VoiceOrb color={color} size={420} />
+      <MatrixOrb size={44} color={color} level={audioLevel / 100}
+        state={thinking ? "thinking" : speaking || audioLevel > 2 ? "listening" : "idle"}
+        labels={{ listening: speaking ? "Speaking" : "Listening", idle: "Ready" }}
+        className="absolute -bottom-16 left-1/2 -translate-x-1/2 gap-0" />
     </motion.div>
   );
 }

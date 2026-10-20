@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useRef, useEffect, useState, useCallback } from "react";
+import { FormEvent, useRef, useEffect, useState } from "react";
 import { 
   Mic, 
   ArrowUp, 
@@ -8,18 +8,17 @@ import {
   Image as ImageIcon, 
   Paperclip, 
   Sparkles,
-  Zap,
   Globe,
-  Settings2,
   X,
   FileIcon,
-  CloudUpload
+  type LucideIcon,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { MOODS } from "@/app/chat/page";
+import { MOODS } from "@/lib/chat/moods";
 import { cn } from "@/lib/utils";
 import { useAppDispatch } from "@/store/hooks";
 import { clearMood } from "@/store/slices/chatSlice";
+import MatrixOrb from "@/components/ui/matrix-orb";
 
 type ChatInputProps = {
   input: string;
@@ -32,6 +31,8 @@ type ChatInputProps = {
   /** Called when the user clicks the Stop button while a response is streaming. */
   onStop?: () => void;
   selectedMood?: string;
+  webSearch?: boolean;
+  onWebSearchChange?: (enabled: boolean) => void;
 };
 
 export default function ChatInput({
@@ -44,6 +45,8 @@ export default function ChatInput({
   onVoiceClick,
   onStop,
   selectedMood,
+  webSearch = false,
+  onWebSearchChange,
 }: ChatInputProps) {
   const dispatch = useAppDispatch();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -52,10 +55,22 @@ export default function ChatInput({
   const [isImageGenMode, setIsImageGenMode] = useState(false);
   const [attachments, setAttachments] = useState<File[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
+  const previewUrls = useRef(new Set<string>());
   const [charCount, setCharCount] = useState(0);
 
   const MAX_CHARS = 4000;
   const WARN_CHARS = 3800;
+
+  useEffect(() => {
+    const urls = previewUrls.current;
+    return () => urls.forEach((url) => URL.revokeObjectURL(url));
+  }, []);
+  const clearAttachments = () => {
+    previewUrls.current.forEach((url) => URL.revokeObjectURL(url));
+    previewUrls.current.clear();
+    setAttachments([]);
+    setPreviews([]);
+  };
 
   useEffect(() => {
     setCharCount(input.length);
@@ -66,12 +81,11 @@ export default function ChatInput({
   }, [input]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
+    if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault();
       if ((input.trim() || attachments.length > 0) && !disabled && !isLoading) {
         handleSubmit(e as unknown as FormEvent<HTMLFormElement>, attachments);
-        setAttachments([]);
-        setPreviews([]);
+        clearAttachments();
       }
     }
   };
@@ -96,6 +110,7 @@ export default function ChatInput({
     if (validFiles.length > 0) {
       setAttachments(prev => [...prev, ...validFiles]);
       const newPreviews = validFiles.map(file => URL.createObjectURL(file));
+      newPreviews.forEach((url) => previewUrls.current.add(url));
       setPreviews(prev => [...prev, ...newPreviews]);
     }
   };
@@ -104,6 +119,7 @@ export default function ChatInput({
     setAttachments(prev => prev.filter((_, i) => i !== index));
     setPreviews(prev => {
       URL.revokeObjectURL(prev[index]);
+      previewUrls.current.delete(prev[index]);
       return prev.filter((_, i) => i !== index);
     });
   };
@@ -163,6 +179,8 @@ export default function ChatInput({
                     animate={{ scale: 1, opacity: 1 }}
                     className="relative size-16 rounded-xl overflow-hidden group border border-white/10"
                   >
+                    {/* Local object URLs do not use the Next image optimizer. */}
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={src} alt="preview" className="size-full object-cover" />
                     <button 
                       onClick={() => removeAttachment(i)}
@@ -177,8 +195,10 @@ export default function ChatInput({
           </AnimatePresence>
 
           {/* Top Bar: Capabilities & Context */}
-          <div className="flex items-center justify-between px-4 py-2 border-b border-white/5 mb-2">
-            <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-2 px-2 sm:px-4 py-2 border-b border-white/5 mb-2">
+            <div className="flex min-w-0 items-center gap-2">
+              <MatrixOrb size={28} dots={9} color="#a5b4fc" state={isLoading ? "thinking" : "idle"}
+                className="gap-0 [&>span]:sr-only" labels={{ idle: "Ready", thinking: "Responding" }} />
               <motion.div 
                 layout
                 className={cn(
@@ -186,8 +206,8 @@ export default function ChatInput({
                   isImageGenMode ? "bg-purple-500/20 text-purple-300 border border-purple-500/30" : "bg-indigo-500/10 text-indigo-400 border border-indigo-500/20"
                 )}
               >
-                {isImageGenMode ? <Sparkles className="size-3 animate-pulse" /> : <Zap className="size-3" />}
-                {isImageGenMode ? "Image Synthesis Active" : "Multimodal Orchestration"}
+                {isImageGenMode && <Sparkles className="size-3 animate-pulse" />}
+                {isImageGenMode ? "Create image" : "Friends AI"}
               </motion.div>
               <button
                 type="button"
@@ -218,12 +238,13 @@ export default function ChatInput({
             </div>
             
             <div className="flex items-center gap-4">
-              <div className="flex items-center gap-1.5 opacity-40 hover:opacity-100 transition-opacity cursor-help">
-                <Globe className="size-3 text-zinc-400" />
-                <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest">Web Search: On</span>
-              </div>
-              <button type="button" className="p-1 text-zinc-600 hover:text-white transition-colors">
-                <Settings2 className="size-3.5" />
+              <button type="button" aria-label="Web search" aria-pressed={webSearch}
+                disabled={isLoading || isImageGenMode} onClick={() => onWebSearchChange?.(!webSearch)}
+                title="Gemini uses Google Search when it helps answer your question. Provider usage charges may apply."
+                className={cn("flex items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-[10px] disabled:opacity-50 transition-colors",
+                  webSearch ? "border-indigo-400/30 bg-indigo-400/10 text-indigo-200" : "border-white/10 text-zinc-400")}>
+                <Globe className="size-3" />
+                Search {webSearch ? "on" : "off"}
               </button>
             </div>
           </div>
@@ -231,13 +252,13 @@ export default function ChatInput({
           {/* Main Input Area */}
           <form 
             onSubmit={(e) => {
+              if (disabled || isLoading || (!input.trim() && !attachments.length)) { e.preventDefault(); return; }
               handleSubmit(e, attachments);
-              setAttachments([]);
-              setPreviews([]);
+              clearAttachments();
             }} 
             className="flex flex-col"
           >
-            <div className="flex items-end gap-3 px-3 py-2">
+            <div className="flex flex-wrap sm:flex-nowrap items-end gap-1 sm:gap-3 px-1 sm:px-3 py-2">
               {/* Attachment Button */}
               <input 
                 type="file" 
@@ -276,9 +297,10 @@ export default function ChatInput({
                 onBlur={() => setIsFocused(false)}
                 placeholder={isImageGenMode ? "Describe the image you'd like to create…" : "Ask Friends AI anything…"}
                 rows={1}
+                aria-label="Message Friends AI"
                 maxLength={MAX_CHARS}
                 disabled={disabled}
-                className="flex-1 max-h-[200px] py-2.5 bg-transparent text-white placeholder:text-zinc-500 text-[15px] font-medium focus:outline-none resize-none min-h-[48px]"
+                className="order-first sm:order-none basis-full sm:basis-auto min-w-0 flex-1 max-h-[200px] py-2.5 bg-transparent text-white placeholder:text-zinc-500 text-[15px] font-medium focus:outline-none resize-none min-h-[48px]"
               />
 
               {/* Character Count Indicator */}
@@ -296,7 +318,7 @@ export default function ChatInput({
               )}
 
               {/* Action Buttons */}
-              <div className="flex items-center gap-2.5 mb-1.5 shrink-0">
+              <div className="ml-auto flex items-center gap-1 sm:gap-2.5 mb-1.5 shrink-0">
                 <AnimatePresence mode="popLayout">
                   {!input.trim() && attachments.length === 0 && (
                     <motion.button
@@ -306,7 +328,7 @@ export default function ChatInput({
                       type="button"
                       onClick={() => {
                         setIsImageGenMode(!isImageGenMode);
-                        if (!isImageGenMode) handleInputChange({ target: { value: "/image " } } as any);
+                        if (!isImageGenMode) handleInputChange({ target: { value: "/image " } } as React.ChangeEvent<HTMLTextAreaElement>);
                       }}
                       className={cn(
                         "p-2.5 rounded-2xl transition-all border shadow-lg",
@@ -354,14 +376,11 @@ export default function ChatInput({
             
             {/* Contextual Suggestions */}
             <div className="flex items-center gap-3 px-4 pb-2.5">
-              <SuggestionChip label="/image" onClick={() => handleInputChange({ target: { value: "/image " } } as any)} />
-              <SuggestionChip label="/reason" onClick={() => handleInputChange({ target: { value: "/reason " } } as any)} />
+              <SuggestionChip label="/image" onClick={() => handleInputChange({ target: { value: "/image " } } as React.ChangeEvent<HTMLTextAreaElement>)} />
+              <SuggestionChip label="/reason" onClick={() => handleInputChange({ target: { value: "/reason " } } as React.ChangeEvent<HTMLTextAreaElement>)} />
               <SuggestionChip label="Analyze PDF" icon={FileIcon} />
               
-              <div className="ml-auto flex items-center gap-2">
-                <span className="text-[9px] font-black text-zinc-700 uppercase tracking-widest">Neural v2.4 Status:</span>
-                <div className="size-1.5 rounded-full bg-green-500 animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.5)]" />
-              </div>
+              <span className="ml-auto hidden sm:block text-[10px] text-zinc-500">Shift + Enter for a new line</span>
             </div>
           </form>
         </div>
@@ -370,7 +389,7 @@ export default function ChatInput({
   );
 }
 
-function SuggestionChip({ label, icon: Icon, onClick }: any) {
+function SuggestionChip({ label, icon: Icon, onClick }: { label: string; icon?: LucideIcon; onClick?: () => void }) {
   return (
     <button 
       type="button" 

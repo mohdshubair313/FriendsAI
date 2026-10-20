@@ -1,5 +1,3 @@
-"use client";
-
 import { cn } from "@/lib/utils";
 import * as React from "react";
 
@@ -39,7 +37,7 @@ export function Marquee({
           pauseOnHover && "group-hover:[animation-play-state:paused]"
         )}
         style={{
-          animation: `marquee ${speedSec}s linear infinite ${reverse ? "reverse" : ""}`,
+          animation: `v2-marquee ${speedSec}s linear infinite ${reverse ? "reverse" : ""}`,
         }}
       >
         {children}
@@ -51,7 +49,7 @@ export function Marquee({
           pauseOnHover && "group-hover:[animation-play-state:paused]"
         )}
         style={{
-          animation: `marquee ${speedSec}s linear infinite ${reverse ? "reverse" : ""}`,
+          animation: `v2-marquee ${speedSec}s linear infinite ${reverse ? "reverse" : ""}`,
         }}
       >
         {children}

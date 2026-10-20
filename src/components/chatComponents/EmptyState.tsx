@@ -13,7 +13,7 @@ import {
   MessageSquarePlus,
   Compass
 } from "lucide-react";
-import { MOODS } from "@/app/chat/page";
+import { MOODS } from "@/lib/chat/moods";
 import { cn } from "@/lib/utils";
 
 const moodSuggestions: Record<string, { icon: React.ReactNode; label: string; prompt: string }[]> = {

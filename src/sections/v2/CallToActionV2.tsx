@@ -1,5 +1,3 @@
-"use client";
-
 import * as React from "react";
 import { FadeInUp } from "@/components/v2/ui/FadeInUp";
 import { MagneticButton } from "@/components/v2/ui/MagneticButton";

@@ -27,7 +27,7 @@ const NAV_ITEMS = [
   { id: "livetalk", label: "LiveTalk Avatar", icon: Video, href: "/live_talk", color: "text-cyan-400" },
 ];
 
-export default function Sidebar() {
+export default function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
@@ -47,6 +47,7 @@ export default function Sidebar() {
   // "New conversation" button: navigate to /chat without a `c` query.
   const handleNewSession = () => {
     router.push("/chat");
+    onNavigate?.();
   };
 
   return (

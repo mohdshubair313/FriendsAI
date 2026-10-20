@@ -4,6 +4,7 @@ import { Types } from "mongoose";
 import { connectToDb } from "@/lib/db";
 import { Conversation, Message } from "@/models/Conversation";
 import { errMessage } from "@/lib/errors";
+import type { SearchResult } from "@/lib/chat/message-ui";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -67,6 +68,7 @@ export async function GET(
         role: "user" | "assistant" | "tool" | "system";
         content: string;
         parts: MessagePart[];
+        search?: SearchResult;
         createdAt: Date;
       }>>();
 
@@ -81,6 +83,7 @@ export async function GET(
         role: m.role,
         content: m.content,
         imageUrl: imagePart?.url ?? null,
+        search: m.search,
         createdAt: m.createdAt,
       };
     });

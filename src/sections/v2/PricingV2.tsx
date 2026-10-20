@@ -1,5 +1,3 @@
-"use client";
-
 import { cn } from "@/lib/utils";
 import * as React from "react";
 import { FadeInUp } from "@/components/v2/ui/FadeInUp";
@@ -38,8 +36,8 @@ const tiers: Tier[] = [
     id: "pro",
     name: "Pro",
     tagline: "The premium experience, fully unlocked.",
-    priceMonthly: "₹499",
-    unit: "/ month",
+    priceMonthly: "₹99",
+    unit: "/ 30 days",
     cta: "Go Pro",
     href: "/premium",
     highlight: true,
@@ -55,7 +53,6 @@ const tiers: Tier[] = [
 ];
 
 export function PricingV2() {
-  const [annual, setAnnual] = React.useState(false);
 
   return (
     <section
@@ -87,22 +84,20 @@ export function PricingV2() {
               live avatar, streaming voice, and the full agent graph.
             </p>
           </FadeInUp>
-          <FadeInUp delay={0.24}>
-            <BillingToggle annual={annual} setAnnual={setAnnual} />
-          </FadeInUp>
+
         </div>
 
         <div className="grid gap-5 md:grid-cols-2">
           {tiers.map((t, i) => (
             <FadeInUp key={t.id} delay={0.1 + i * 0.08}>
-              <PricingCard tier={t} annual={annual} />
+              <PricingCard tier={t} />
             </FadeInUp>
           ))}
         </div>
 
         <FadeInUp delay={0.4}>
           <p className="v2-font-sans mt-10 text-center text-[13px] text-white/45">
-            Prices in INR · Razorpay-secured · Cancel anytime
+            Prices in INR · 30 days of Pro per purchase · Daily limits apply
           </p>
         </FadeInUp>
       </div>
@@ -110,53 +105,8 @@ export function PricingV2() {
   );
 }
 
-function BillingToggle({
-  annual,
-  setAnnual,
-}: {
-  annual: boolean;
-  setAnnual: (v: boolean) => void;
-}) {
-  return (
-    <div
-      role="tablist"
-      aria-label="Billing period"
-      className="mt-8 inline-flex rounded-full v2-glass p-1"
-    >
-      {[
-        { l: "Monthly", v: false },
-        { l: "Annual · save 20%", v: true },
-      ].map((o) => (
-        <button
-          key={o.l}
-          role="tab"
-          aria-selected={annual === o.v}
-          onClick={() => setAnnual(o.v)}
-          className={cn(
-            "relative rounded-full px-4 py-1.5 text-[13px] font-medium tracking-tight transition-colors",
-            annual === o.v
-              ? "text-black"
-              : "text-white/60 hover:text-white"
-          )}
-        >
-          {annual === o.v && (
-            <span
-              aria-hidden
-              className="absolute inset-0 -z-[1] rounded-full bg-white"
-              style={{ boxShadow: "0 6px 24px -6px rgba(255,255,255,0.4)" }}
-            />
-          )}
-          {o.l}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-function PricingCard({ tier, annual }: { tier: Tier; annual: boolean }) {
-  const proAnnualMonthly = "₹399";
-  const displayPrice =
-    tier.id === "pro" && annual ? proAnnualMonthly : tier.priceMonthly;
+function PricingCard({ tier }: { tier: Tier }) {
+  const displayPrice = tier.priceMonthly;
   return (
     <div className="group relative">
       {tier.highlight && (
@@ -187,14 +137,9 @@ function PricingCard({ tier, annual }: { tier: Tier; annual: boolean }) {
             {displayPrice}
           </span>
           <span className="text-[14px] text-white/45">
-            {tier.id === "pro" ? "/ month" : tier.unit}
+            {tier.unit}
           </span>
         </div>
-        {tier.id === "pro" && annual && (
-          <p className="mt-1 text-[12px] text-white/40">
-            ₹4,788 billed annually
-          </p>
-        )}
 
         <div className="mt-8 h-px bg-white/10" />
 

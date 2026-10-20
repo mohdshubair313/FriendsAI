@@ -10,6 +10,7 @@ interface ParticleTorusProps {
   r?: number;
   pointSize?: number;
   jitter?: number;
+  reducedMotion?: boolean;
 }
 
 /**
@@ -26,14 +27,15 @@ function TorusPoints({
   r = 0.55,
   pointSize = 0.022,
   jitter = 0.08,
+  reducedMotion = false,
 }: ParticleTorusProps) {
   const ref = React.useRef<THREE.Points>(null);
-  const { mouse, viewport } = useThree();
+  const pointer = useThree((state) => state.pointer);
+  const aspect = useThree((state) => state.viewport.aspect);
 
-  const { positions, colors, sizes } = React.useMemo(() => {
+  const { positions, colors } = React.useMemo(() => {
     const positions = new Float32Array(count * 3);
     const colors = new Float32Array(count * 3);
-    const sizes = new Float32Array(count);
 
     const cA = new THREE.Color("#6366f1"); // indigo
     const cB = new THREE.Color("#22d3ee"); // cyan
@@ -71,23 +73,26 @@ function TorusPoints({
       colors[i * 3 + 1] = tmp.g * lum;
       colors[i * 3 + 2] = tmp.b * lum;
 
-      sizes[i] = pointSize * (0.6 + Math.random() * 0.9);
     }
 
-    return { positions, colors, sizes };
-  }, [count, R, r, pointSize, jitter]);
+    return { positions, colors };
+  }, [count, R, r, jitter]);
 
   // Smoothed mouse vector for parallax.
   const targetRot = React.useRef({ x: 0.45, y: 0 });
   const rot = React.useRef({ x: 0.45, y: 0 });
+  const elapsed = React.useRef(0);
 
   useFrame((_state, dt) => {
     const points = ref.current;
-    if (!points) return;
+    if (!points || reducedMotion) return;
+    // Prevent a jump after resuming a hidden tab or offscreen hero.
+    dt = Math.min(dt, 0.05);
+    elapsed.current += dt;
 
     // mouse is normalized [-1, 1]; viewport gives us aspect for subtle weighting.
-    const mx = mouse.x;
-    const my = mouse.y;
+    const mx = pointer.x;
+    const my = pointer.y;
     targetRot.current.y = mx * 0.5;
     targetRot.current.x = 0.45 + -my * 0.35;
 
@@ -101,12 +106,12 @@ function TorusPoints({
     points.rotation.z = rot.current.y * 0.15;
 
     // Subtle breathing scale.
-    const t = performance.now() * 0.0006;
+    const t = elapsed.current * 0.6;
     const s = 1 + Math.sin(t) * 0.012;
     points.scale.setScalar(s);
 
     // Aspect-aware nudge on small screens.
-    if (viewport.aspect < 1) {
+    if (aspect < 1) {
       points.position.y = -0.1;
     } else {
       points.position.y = 0;
@@ -114,7 +119,7 @@ function TorusPoints({
   });
 
   return (
-    <points ref={ref} frustumCulled={false}>
+    <points ref={ref} frustumCulled={false} rotation={[0.45, 0, 0]} position={[0, aspect < 1 ? -0.1 : 0, 0]}>
       <bufferGeometry>
         <bufferAttribute
           attach="attributes-position"
@@ -124,11 +129,6 @@ function TorusPoints({
         <bufferAttribute
           attach="attributes-color"
           args={[colors, 3]}
-          count={count}
-        />
-        <bufferAttribute
-          attach="attributes-size"
-          args={[sizes, 1]}
           count={count}
         />
       </bufferGeometry>
@@ -148,7 +148,7 @@ function TorusPoints({
 /**
  * Inner-ring counter-rotating accent ring for visual richness.
  */
-function AccentRing() {
+function AccentRing({ reducedMotion = false }: { reducedMotion?: boolean }) {
   const ref = React.useRef<THREE.Points>(null);
   const count = 1200;
   const positions = React.useMemo(() => {
@@ -164,13 +164,13 @@ function AccentRing() {
   }, []);
 
   useFrame((_, dt) => {
-    if (!ref.current) return;
-    ref.current.rotation.y -= dt * 0.18;
+    if (!ref.current || reducedMotion) return;
+    ref.current.rotation.y -= Math.min(dt, 0.05) * 0.18;
     ref.current.rotation.x = 0.5;
   });
 
   return (
-    <points ref={ref}>
+    <points ref={ref} rotation={[0.5, 0, 0]}>
       <bufferGeometry>
         <bufferAttribute
           attach="attributes-position"
@@ -194,9 +194,8 @@ function AccentRing() {
 export function ParticleTorusScene(props: ParticleTorusProps) {
   return (
     <>
-      <ambientLight intensity={0.6} />
       <TorusPoints {...props} />
-      <AccentRing />
+      <AccentRing reducedMotion={props.reducedMotion} />
     </>
   );
 }

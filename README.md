@@ -64,3 +64,7 @@ npx tsx src/worker.ts
 
 ## 📄 License
 Private Repository. All rights reserved.
+
+## UI credits
+
+Chat, voice, image reveal and search interfaces use components adapted from [Rare UI](https://rareui.com) by Swami Malode. See [the Rare UI license](docs/licenses/rare-ui.txt).
